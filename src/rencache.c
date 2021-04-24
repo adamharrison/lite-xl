@@ -24,7 +24,7 @@ typedef struct {
   int32_t size;
   RenRect rect;
   RenColor color;
-  RenFont *font;
+  FontDesc *font_desc;
   CPReplaceTable *replacements;
   RenColor replace_color;
   char text[0];
@@ -115,9 +115,9 @@ void rencache_show_debug(bool enable) {
 }
 
 
-void rencache_free_font(RenFont *font) {
+void rencache_free_font(FontDesc *font_desc) {
   Command *cmd = push_command(FREE_FONT, COMMAND_BARE_SIZE);
-  if (cmd) { cmd->font = font; }
+  if (cmd) { cmd->font_desc = font_desc; }
 }
 
 
