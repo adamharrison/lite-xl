@@ -136,7 +136,7 @@ void rencache_draw_rect(RenRect rect, RenColor color) {
   }
 }
 
-int rencache_draw_text(RenFont *font,
+int rencache_draw_text(FontDesc *font_desc,
   const char *text, int x, int y, RenColor color, bool draw_subpixel,
   CPReplaceTable *replacements, RenColor replace_color)
 {
@@ -154,7 +154,7 @@ int rencache_draw_text(RenFont *font,
     if (cmd) {
       memcpy(cmd->text, text, sz);
       cmd->color = color;
-      cmd->font = font;
+      cmd->font_desc = font_desc;
       cmd->rect = rect;
       cmd->subpixel_scale = (draw_subpixel ? subpixel_scale : 1);
       cmd->x_subpixel_offset = x - subpixel_scale * rect.x;
@@ -272,13 +272,16 @@ void rencache_end_frame(void) {
           ren_draw_rect(cmd->rect, cmd->color);
           break;
         case DRAW_TEXT:
-          ren_set_font_tab_size(cmd->font, cmd->tab_size);
-          ren_draw_text(cmd->font, cmd->text, cmd->rect.x, cmd->rect.y, cmd->color,
+          // FIXME: to be implemented
+          font_desc_set_tab_size(cmd->font_desc, cmd->tab_size);
+          // FIXME: function to be adapted
+          ren_draw_text(cmd->font_desc, cmd->text, cmd->rect.x, cmd->rect.y, cmd->color,
             cmd->replacements, cmd->replace_color);
           break;
         case DRAW_TEXT_SUBPIXEL:
-          ren_set_font_tab_size(cmd->font, cmd->tab_size);
-          ren_draw_text_subpixel(cmd->font, cmd->text,
+          font_desc_set_tab_size(cmd->font_desc, cmd->tab_size);
+          // FIXME: function to be adapted
+          ren_draw_text_subpixel(cmd->font_desc, cmd->text,
             cmd->subpixel_scale * cmd->rect.x + cmd->x_subpixel_offset, cmd->rect.y, cmd->color,
             cmd->replacements, cmd->replace_color);
           break;
@@ -301,7 +304,8 @@ void rencache_end_frame(void) {
     cmd = NULL;
     while (next_command(&cmd)) {
       if (cmd->type == FREE_FONT) {
-        ren_free_font(cmd->font);
+        // FIXME: to be implemented
+        font_desc_free(cmd->font_desc);
       }
     }
   }

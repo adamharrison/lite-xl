@@ -1,7 +1,7 @@
 #ifndef FONT_DESC_H
 #define FONT_DESC_H
 
-#include "renderer.h"
+typedef struct RenFont RenFont;
 
 struct FontScaled {
   RenFont *font;

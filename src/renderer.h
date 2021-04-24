@@ -3,9 +3,9 @@
 
 #include <SDL.h>
 #include <stdint.h>
+#include "fontdesc.h"
 
 typedef struct RenImage RenImage;
-typedef struct RenFont RenFont;
 
 enum {
   RenFontAntialiasingMask = 1,
@@ -54,8 +54,8 @@ int ren_font_subpixel_round(int width, int subpixel_scale, int orientation);
 
 void ren_draw_rect(RenRect rect, RenColor color);
 void ren_draw_image(RenImage *image, RenRect *sub, int x, int y, RenColor color);
-void ren_draw_text(RenFont *font, const char *text, int x, int y, RenColor color, CPReplaceTable *replacements, RenColor replace_color);
-void ren_draw_text_subpixel(RenFont *font, const char *text, int x_subpixel, int y, RenColor color, CPReplaceTable *replacements, RenColor replace_color);
+void ren_draw_text(FontDesc *font_desc, const char *text, int x, int y, RenColor color, CPReplaceTable *replacements, RenColor replace_color);
+void ren_draw_text_subpixel(FontDesc *font_desc, const char *text, int x_subpixel, int y, RenColor color, CPReplaceTable *replacements, RenColor replace_color);
 
 void ren_cp_replace_init(CPReplaceTable *rep_table);
 void ren_cp_replace_free(CPReplaceTable *rep_table);
