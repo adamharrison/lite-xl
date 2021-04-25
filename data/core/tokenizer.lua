@@ -41,10 +41,7 @@ end
 -- State is a 32-bit number that is four separate bytes, illustrating how many differnet delimiters we have open, and which subsyntaxes we have active.
 -- At most, there are 3 subsyntaxes active at the same time. Beyond that, does not support further highlighting.
 local function retrieve_syntax_state(incoming_syntax, state)
-  local current_syntax = incoming_syntax
-  local subsyntax_info = nil
-  local current_state = 0
-  local current_level = 0
+  local current_syntax, subsyntax_info, current_state, current_level = incoming_syntax, nil, 0, 0
   if state > 0 and (state > 255 or current_syntax.patterns[state].syntax) then
     -- If we have higher bits, then decode them, and find which syntax we're using.
     if state > 255 then
