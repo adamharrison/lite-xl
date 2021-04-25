@@ -40,17 +40,9 @@ end
 
 -- State is a 32-bit number that is four separate bytes, illustrating how many differnet delimiters we have open, and which subsyntaxes we have active.
 -- At most, there are 3 subsyntaxes active at the same time. Beyond that, does not support further highlighting.
-function tokenizer.tokenize(incoming_syntax, text, state)
-  local res = {}
-  local i = 1
-
-  if #incoming_syntax.patterns == 0 then
-    return { "normal", text }
-  end
- 
-  state = state or 0
-  local subsyntax_info = nil
+local function retrieve_syntax_state(incoming_syntax, state)
   local current_syntax = incoming_syntax
+  local subsyntax_info = nil
   local current_state = 0
   local current_level = 0
   if state > 0 and (state > 255 or current_syntax.patterns[state].syntax) then
@@ -76,6 +68,19 @@ function tokenizer.tokenize(incoming_syntax, text, state)
       current_syntax = syntax.get(incoming_syntax.patterns[state].syntax)
     end
   end
+  return current_syntax, subsyntax_info, current_state, current_level
+end
+
+function tokenizer.tokenize(incoming_syntax, text, state)
+  local res = {}
+  local i = 1
+
+  if #incoming_syntax.patterns == 0 then
+    return { "normal", text }
+  end
+ 
+  state = state or 0
+  local current_syntax, subsyntax_info, current_state, current_level = retrieve_syntax_state(incoming_syntax, state)
 
   while i <= #text do
     -- continue trying to match the end pattern of a pair if we have a state set
@@ -106,9 +111,7 @@ function tokenizer.tokenize(incoming_syntax, text, state)
           subsyntax_info = nil
           current_state = 0
         else
-          -- No double nesting yet.
-          -- current_syntax = bit32.extract(state, current_level*8, 8)
-          assert(false, "TODO")
+          current_syntax, subsyntax_info, current_state, current_level = retrieve_syntax_state(incoming_syntax, state)
         end
         i = e + 1
       end
