@@ -41,28 +41,25 @@ end
 -- State is a 32-bit number that is four separate bytes, illustrating how many differnet delimiters we have open, and which subsyntaxes we have active.
 -- At most, there are 3 subsyntaxes active at the same time. Beyond that, does not support further highlighting.
 local function retrieve_syntax_state(incoming_syntax, state)
-  local current_syntax, subsyntax_info, current_state, current_level = incoming_syntax, nil, 0, 0
+  local current_syntax, subsyntax_info, current_state, current_level = incoming_syntax, nil, state, 0
   if state > 0 and (state > 255 or current_syntax.patterns[state].syntax) then
-    -- If we have higher bits, then decode them, and find which syntax we're using.
-    if state > 255 then
-      for current_level=1,3 do
-        local target = bit32.extract(state, current_level*8, 8)
-        if target ~= 0 then
-          if current_syntax.patterns[target].syntax then
-            current_syntax = syntax.get(current_syntax.patterns[target].syntax)
-            subsyntax_info = current_syntax.patterns[target]
-          else
-            current_state = target
-            break
-          end
-        else      
+    -- If we have higher bits, then decode them one at a time, and find which syntax we're using.
+    -- TODO: Rather than walking the bytes, and calling into `syntax` each time, we could probably cache this in a single table.
+    for i=0,2 do
+      local target = bit32.extract(state, i*8, 8)
+      if target ~= 0 then
+        if current_syntax.patterns[target].syntax then
+          subsyntax_info = current_syntax.patterns[target]
+          current_syntax = syntax.get(current_syntax.patterns[target].syntax)
+          current_state = 0
+          current_level = i+1
+        else
+          current_state = target
           break
         end
+      else      
+        break
       end
-    else
-      current_level = 1
-      subsyntax_info = incoming_syntax.patterns[state]
-      current_syntax = syntax.get(incoming_syntax.patterns[state].syntax)
     end
   end
   return current_syntax, subsyntax_info, current_state, current_level
@@ -78,38 +75,43 @@ function tokenizer.tokenize(incoming_syntax, text, state)
  
   state = state or 0
   local current_syntax, subsyntax_info, current_state, current_level = retrieve_syntax_state(incoming_syntax, state)
-
   while i <= #text do
     -- continue trying to match the end pattern of a pair if we have a state set
     if current_state > 0 then
       local p = current_syntax.patterns[current_state]
       local s, e = find_non_escaped(text, p.pattern[2], i, p.pattern[3])
-
-      if s then
-        push_token(res, p.type, text:sub(i, e))
-        current_state = 0
-        state = bit32.replace(state, 0, current_level*8, 8)
-        i = e + 1
-      else
-        push_token(res, p.type, text:sub(i))
-        break
+      
+      local cont = true
+      -- If we're in subsyntax mode, always check to see if we end our syntax first.
+      if subsyntax_info then
+        local ss, se = find_non_escaped(text, subsyntax_info.pattern[2], i, subsyntax_info.pattern[3])
+        if ss and (s == nil or ss < s) then
+          push_token(res, p.type, text:sub(i, ss - 1))          
+          i = ss
+          cont = false
+        end
+      end
+      if cont then
+        if s then
+          push_token(res, p.type, text:sub(i, e))
+          current_state = 0
+          state = bit32.replace(state, 0, current_level*8, 8)
+          i = e + 1
+        else
+          push_token(res, p.type, text:sub(i))
+          break
+        end
       end
     end
+    -- Check for end of syntax.
     if subsyntax_info then
-      local s, e = find_non_escaped(text, subsyntax_info.pattern[2], i, nil)
-
+      local s, e = find_non_escaped(text, "^" .. subsyntax_info.pattern[2], i, nil)
       if s then
         push_token(res, subsyntax_info.type, text:sub(i, e))
-        current_state = 0
-        state = bit32.replace(state, 0, current_level*8, 8)
         current_level = current_level - 1
-        if current_level == 0 then
-          current_syntax = incoming_syntax
-          subsyntax_info = nil
-          current_state = 0
-        else
-          current_syntax, subsyntax_info, current_state, current_level = retrieve_syntax_state(incoming_syntax, state)
-        end
+        -- Zero out the state above us, as well as our new current state.
+        state = bit32.replace(state, 0, current_level*8, 16)
+        current_syntax, subsyntax_info, current_state, current_level = retrieve_syntax_state(incoming_syntax, state)
         i = e + 1
       end
     end
@@ -127,11 +129,15 @@ function tokenizer.tokenize(incoming_syntax, text, state)
         push_token(res, current_syntax.symbols[t] or p.type, t)
         -- update state if this was a start|end pattern pair
         if type(p.pattern) == "table" then
-          current_state = n
           state = bit32.replace(state, n, current_level*8, 8)
+          -- If we've found a new subsyntax, bump our level, and set the appropriate variables.
           if p.syntax then
             current_level = current_level + 1
             subsyntax_info = p
+            current_syntax = syntax.get(p.syntax)
+            current_state = 0
+          else        
+            current_state = n
           end
         end
 
