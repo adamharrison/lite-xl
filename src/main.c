@@ -86,16 +86,6 @@ static void init_window_icon(void) {
 #endif
 }
 
-#ifdef _WIN32
-#define LITE_OS_HOME "USERPROFILE"
-#define LITE_PATHSEP_PATTERN "\\\\"
-#define LITE_NONPATHSEP_PATTERN "[^\\\\]+"
-#else
-#define LITE_OS_HOME "HOME"
-#define LITE_PATHSEP_PATTERN "/"
-#define LITE_NONPATHSEP_PATTERN "[^/]+"
-#endif
-
 #ifdef __APPLE__
 void set_macos_bundle_resources(lua_State *L);
 void enable_momentum_scroll();

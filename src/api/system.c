@@ -517,27 +517,55 @@ static int f_exec(lua_State *L) {
 
 
 static int f_fuzzy_match(lua_State *L) {
-  const char *str = luaL_checkstring(L, 1);
-  const char *ptn = luaL_checkstring(L, 2);
+  size_t strLen, ptnLen;
+  const char *strStart = luaL_checklstring(L, 1, &strLen);
+  const char *ptnStart = luaL_checklstring(L, 2, &ptnLen);
+  bool files = false;
+  if (lua_gettop(L) > 2 && lua_isboolean(L, 3))
+    files = lua_toboolean(L, 3);
+  
   int score = 0;
   int run = 0;
 
-  while (*str && *ptn) {
-    while (*str == ' ') { str++; }
-    while (*ptn == ' ') { ptn++; }
-    if (tolower(*str) == tolower(*ptn)) {
-      score += run * 10 - (*str != *ptn);
-      run++;
-      ptn++;
-    } else {
-      score -= 10;
-      run = 0;
+  // Match things *backwards*. This allows for better matching on filenames than the above 
+  // function. For example, in the lite project, opening "renderer" has lib/font_render/build.sh
+  // as the first result, rather than src/renderer.c. Clearly that's wrong.
+  if (files) {
+    const char* strEnd = strStart + strLen - 1;
+    const char* ptnEnd = ptnStart + ptnLen - 1;
+    
+    while (strEnd >= strStart && ptnEnd >= ptnStart) {
+      while (*strEnd == ' ') { strEnd--; }
+      while (*ptnEnd == ' ') { ptnEnd--; }
+      if (tolower(*strEnd) == tolower(*ptnEnd)) {
+        score += run * 10 - (*strEnd != *ptnEnd);
+        run++;
+        ptnEnd--;
+      } else {
+        score -= 10;
+        run = 0;
+      }
+      strEnd--;
     }
-    str++;
+    if (ptnEnd >= ptnStart) { return 0; }
+  } else {
+    while (*strStart && *ptnStart) {
+      while (*strStart == ' ') { strStart++; }
+      while (*ptnStart == ' ') { ptnStart++; }
+      if (tolower(*strStart) == tolower(*ptnStart)) {
+        score += run * 10 - (*strStart != *ptnStart);
+        run++;
+        ptnStart++;
+      } else {
+        score -= 10;
+        run = 0;
+      }
+      strStart++;
+    }
+    if (*ptnStart) { return 0; }
   }
-  if (*ptn) { return 0; }
 
-  lua_pushnumber(L, score - (int) strlen(str));
+  lua_pushnumber(L, score - strLen);
   return 1;
 }
 
