@@ -4,12 +4,16 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include "api.h"
 #include "rencache.h"
 #ifdef _WIN32
   #include <direct.h>
   #include <windows.h>
+#else
+  #include <sys/prctl.h>
+  #include <fcntl.h>
 #endif
 
 extern SDL_Window *window;
@@ -575,6 +579,101 @@ static int f_set_window_opacity(lua_State *L) {
   return 1;
 }
 
+#ifndef _WIN32
+static int f_popen_read(lua_State* L) {
+  char buffer[10*1024];
+  lua_getfield(L, -1, "i");
+  int inputfd = (int)(long long)lua_touserdata(L, -1);
+  ssize_t len = read(inputfd, buffer, sizeof(buffer));
+  if (len == 0) {
+    lua_pushnil(L);
+    return 1;
+  }
+  if (len == -1) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK)
+      return luaL_error(L, "popen read error: %d", errno);
+    lua_pushstring(L, "");
+    return 1;
+  }
+  lua_pushlstring(L, buffer, len);
+  return 1;
+}
+static int f_popen_write(lua_State* L) {
+  size_t str_len;
+  const char* str = luaL_checklstring(L, -1, &str_len);
+  lua_getfield(L, -2, "o");
+  int outputfd = (int)(long long)lua_touserdata(L, -1);
+  ssize_t len = write(outputfd, str, str_len);
+  if (len == -1) {
+    if (errno == EAGAIN && errno == EWOULDBLOCK)
+      return 0;
+    return luaL_error(L, "popen read error: %d", errno);
+  }
+  lua_pushnumber(L, len);
+  return 1;
+}
+static int f_popen_signal(lua_State* L) {
+  size_t str_len;
+  const char* str = luaL_checklstring(L, -1, &str_len);
+  lua_getfield(L, -2, "p");
+  pid_t pid = luaL_checknumber(L, -1);
+  int sig = SIGINT;
+  if (strcmp(str, "SIGINT") == 0)
+    sig = SIGINT;
+  else if (strcmp(str, "SIGTERM") == 0)
+    sig = SIGTERM;
+  else if (strcmp(str, "SIGKILL") == 0)
+    sig = SIGKILL;
+  if (kill(pid, sig) != 0)
+    return luaL_error(L, "error sending signal");
+  return 0;
+}
+#endif
+
+// Small routine to allow for bi-directional process communications.
+// Intended to be used for non-blocking reads/writes in a coroutine.
+static int f_popen(lua_State* L) {
+  const char* cmd = luaL_checkstring(L, -1);
+  #ifdef _WIN32
+    return luaL_error(L, "posix systems only");
+  #else
+    int inpipefd[2], outpipefd[2];
+    if (pipe(inpipefd) || pipe(outpipefd))
+      return luaL_error(L, "couldn't create pipes");
+    pid_t pid = fork();
+    if (pid == -1) {
+      for (int i = 0; i < 2; ++i) {
+        close(outpipefd[i]);
+        close(inpipefd[i]);
+      }
+      return luaL_error(L, "couldn't fork");
+    } else if (pid == 0) {
+      dup2(outpipefd[0], STDIN_FILENO);
+      dup2(inpipefd[1], STDOUT_FILENO);
+      prctl(PR_SET_PDEATHSIG, SIGTERM);
+      execlp("sh", __FILE__, "-c", cmd, NULL);
+      exit(-1);
+    }
+    close(outpipefd[0]);
+    close(inpipefd[1]);
+    fcntl(inpipefd[0], F_SETFL, fcntl(inpipefd[0], F_GETFL, 0) | O_NONBLOCK);
+    fcntl(outpipefd[1], F_SETFL, fcntl(outpipefd[1], F_GETFL, 0) | O_NONBLOCK);    
+    lua_newtable(L);
+    lua_pushcfunction(L, f_popen_read);
+    lua_setfield(L, -2, "read");
+    lua_pushcfunction(L, f_popen_write);
+    lua_setfield(L, -2, "write");
+    lua_pushcfunction(L, f_popen_signal);
+    lua_setfield(L, -2, "signal");
+    lua_pushnumber(L, pid);
+    lua_setfield(L, -2, "p");
+    lua_pushlightuserdata(L, (void*)(long long)inpipefd[0]);
+    lua_setfield(L, -2, "i");
+    lua_pushlightuserdata(L, (void*)(long long)outpipefd[1]);
+    lua_setfield(L, -2, "o");
+    return 1;
+  #endif 
+}
 
 static const luaL_Reg lib[] = {
   { "poll_event",          f_poll_event          },
@@ -601,6 +700,7 @@ static const luaL_Reg lib[] = {
   { "exec",                f_exec                },
   { "fuzzy_match",         f_fuzzy_match         },
   { "set_window_opacity",  f_set_window_opacity  },
+  { "popen",               f_popen  },
   { NULL, NULL }
 };
 
