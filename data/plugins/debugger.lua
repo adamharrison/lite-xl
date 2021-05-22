@@ -8,6 +8,7 @@ local Doc = require "core.doc"
 local common = require "core.common"
 local style  = require "core.style"
 local config  = require "core.config"
+local process  = require "core.process"
 
 style.debugger_breakpoint = { common.color "#ca3434" }
 style.debugger_execution_point = { common.color "#3434ca" }
@@ -176,7 +177,7 @@ end
 
 local function run_program(program)
   core.add_thread(function()
-    running_program = system.popen("gdb", "-q", "-nx", "--interpreter=mi", "--args", program)
+    running_program = process.popen("gdb", "-q", "-nx", "--interpreter=mi", "--args", program)
     running_program_state = "init"
     for file, v in pairs(breakpoints) do
       for line, v in pairs(breakpoints[file]) do
@@ -247,8 +248,8 @@ command.add(nil, {
   ["debugger:start-or-continue"] = function()
     if running_program then    
       run_gdb_command("cont")
-    else
-      run_program("./lite")
+    elseif config.target_binary then
+      run_program(config.target_binary)
     end
   end,
   ["debugger:run"] = function()
@@ -258,7 +259,7 @@ command.add(nil, {
   end,
   ["debugger:quit"] = function()    
     if running_program then
-      running_program:signal("SIGTERM")
+      running_program:signal("TERM")
     end
   end
 })

@@ -582,27 +582,22 @@ static int f_set_window_opacity(lua_State *L) {
 #ifndef _WIN32
 static int f_pread(lua_State* L) {
   char buffer[10*1024];
-  lua_getfield(L, -1, "i");
-  int inputfd = (int)(long long)lua_touserdata(L, -1);
+  int inputfd = (int)(long long)lua_touserdata(L, 1);
   ssize_t len = read(inputfd, buffer, sizeof(buffer));
-  if (len == 0) {
-    lua_pushnil(L);
-    return 1;
-  }
   if (len == -1) {
     if (errno != EAGAIN && errno != EWOULDBLOCK)
       return luaL_error(L, "popen read error: %d", errno);
     lua_pushstring(L, "");
-    return 1;
-  }
-  lua_pushlstring(L, buffer, len);
+  } else if (len == 0)
+    lua_pushnil(L);
+  else
+    lua_pushlstring(L, buffer, len);
   return 1;
 }
 static int f_pwrite(lua_State* L) {
   size_t str_len;
-  const char* str = luaL_checklstring(L, -1, &str_len);
-  lua_getfield(L, -2, "o");
-  int outputfd = (int)(long long)lua_touserdata(L, -1);
+  int outputfd = (int)(long long)lua_touserdata(L, 1);
+  const char* str = luaL_checklstring(L, 2, &str_len);
   ssize_t len = write(outputfd, str, str_len);
   if (len == -1) {
     if (errno == EAGAIN && errno == EWOULDBLOCK)
@@ -613,25 +608,21 @@ static int f_pwrite(lua_State* L) {
   return 1;
 }
 static int f_psignal(lua_State* L) {
-  size_t str_len;
-  const char* str = luaL_checklstring(L, -1, &str_len);
-  lua_getfield(L, -2, "p");
-  pid_t pid = luaL_checknumber(L, -1);
-  int sig = SIGINT;
-  if (strcmp(str, "SIGINT") == 0)
-    sig = SIGINT;
-  else if (strcmp(str, "SIGTERM") == 0)
-    sig = SIGTERM;
-  else if (strcmp(str, "SIGKILL") == 0)
-    sig = SIGKILL;
+  pid_t pid = luaL_checknumber(L, 1);
+  const char* str = luaL_checkstring(L, 2);
+  int sig = strcmp(str, "TERM") == 0 ? SIGTERM : (strcmp(str, "KILL") == 0 ? SIGKILL : SIGINT);
   if (kill(pid, sig) != 0)
     return luaL_error(L, "error sending signal");
   return 0;
 }
 #endif
 
-// Small routine to allow for bi-directional process communications.
-// Intended to be used for non-blocking reads/writes in a coroutine.
+static int f_pclose(lua_State* L) {
+  for (int i = 1; i <= lua_gettop(L); ++i)
+    close((int)(long long)lua_touserdata(L, i));
+  return 0;
+}
+
 static int f_popen(lua_State* L) {
   size_t arg_len = lua_gettop(L);
   const char* cmd = luaL_checkstring(L, 1);
@@ -663,20 +654,10 @@ static int f_popen(lua_State* L) {
     close(inpipefd[1]);
     fcntl(inpipefd[0], F_SETFL, fcntl(inpipefd[0], F_GETFL, 0) | O_NONBLOCK);
     fcntl(outpipefd[1], F_SETFL, fcntl(outpipefd[1], F_GETFL, 0) | O_NONBLOCK);  
+    lua_pushnumber(L, pid);
     lua_pushlightuserdata(L, (void*)(long long)inpipefd[0]);
     lua_pushlightuserdata(L, (void*)(long long)outpipefd[1]);
-    lua_newtable(L);
-    lua_pushcfunction(L, f_popen_read);
-    lua_setfield(L, -2, "read");
-    lua_pushcfunction(L, f_popen_write);
-    lua_setfield(L, -2, "write");
-    lua_pushcfunction(L, f_popen_signal);
-    lua_setfield(L, -2, "signal");
-    lua_pushnumber(L, pid);
-    lua_setfield(L, -2, "p");
-    lua_setfield(L, -2, "i");
-    lua_setfield(L, -2, "o");
-    return 2;
+    return 3;
   #endif 
 }
 
@@ -706,6 +687,7 @@ static const luaL_Reg lib[] = {
   { "fuzzy_match",         f_fuzzy_match         },
   { "set_window_opacity",  f_set_window_opacity  },
   { "popen",               f_popen               },
+  { "pclose",              f_pclose              },  
   { "psignal",             f_psignal             },
   { "pread",               f_pread               },
   { "pwrite",              f_pwrite              },
