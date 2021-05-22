@@ -94,7 +94,7 @@ function DocView:draw_line_gutter(idx, x, y)
      renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.debugger_breakpoint)
    end
    if execution_point and execution_point[1] == self.doc.abs_filename and idx == execution_point[2] then
-     renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.debugger_execution_point)
+     renderer.draw_rect(x+1, y+1, self:get_gutter_width()-1, self:get_line_height()-1, style.debugger_execution_point)
    end
   draw_line_gutter(self, idx, x, y)
 end

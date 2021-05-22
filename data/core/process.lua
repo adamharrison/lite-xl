@@ -19,6 +19,10 @@ process.terminate = function()
   self:signal("TERM")
   system.pclose(self.input, self.output)
 end
+process.kill = function() 
+  self:signal("KILL")
+  system.pclose(self.input, self.output)
+end
 
 process.popen = function(cmd, ...)
   local proc = {}
