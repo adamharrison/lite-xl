@@ -26,8 +26,12 @@ local running_program_state = nil
 local command_queue = { }
 local waiting_on_result = false
 
+local function run_gdb_command(command, on_finish)
+  table.insert(command_queue, { command, on_finish })
+end
+
 local function has_breakpoint(file, line)
-  return breakpoints[file] and breakpoints[file][line]
+  return breakpoints[file] and breakpoints[file][line] ~= nil
 end
 
 local function add_breakpoint(file, line, force)
@@ -38,7 +42,7 @@ local function add_breakpoint(file, line, force)
   if force or running_program then
     run_gdb_command("b " .. file .. ":" .. line, function(type, category, attributes)
       if attributes["bkpt"] then
-        breakpoints[file][line] = attributes["bkpt"]["number"]
+        breakpoints[file][line] = tonumber(attributes["bkpt"]["number"])
       end
     end)
   end
@@ -48,22 +52,23 @@ local function remove_breakpoint(file, line)
   if running_program and type(breakpoints[file][line]) == "number" then
     run_gdb_command("d " .. breakpoints[file][line])
   end
-  if breakpoints[file] then
+  if breakpoints[file] ~= nil then
     breakpoints[file][line] = nil
   end
 end
 
 local function toggle_breakpoint(file, line)
-  return has_breakpoint(file, line) and remove_breakpoint(file, line) or add_breakpoint(file, line)
+  if has_breakpoint(file, line) then
+    remove_breakpoint(file, line)
+  else
+    add_breakpoint(file, line)
+  end
 end
 
 local function set_execution_point(file, line)
   execution_point = file and { file, line } or nil
 end
 
-local function run_gdb_command(command, on_finish)
-  command_queue.insert({ command, on_finish })
-end
 
 function DocView:on_mouse_moved(x, y, ...)
   on_mouse_moved(self, x, y, ...)
@@ -87,7 +92,7 @@ function DocView:draw_line_gutter(idx, x, y)
    if has_breakpoint(self.doc.abs_filename, idx) then
      renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.debugger_breakpoint)
    end
-   if execution_point and execution_point[1] == self.doc and idx == execution_point[2] then
+   if execution_point and execution_point[1] == self.doc.abs_filename and idx == execution_point[2] then
      renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.debugger_execution_point)
    end
   draw_line_gutter(self, idx, x, y)
@@ -105,6 +110,9 @@ local function parse_gdb_string(str)
   end
 end
 
+local parse_gdb_status_attributes
+local parse_gdb_status_array
+
 local function parse_gdb_status_value(value)
   if value:sub(1, 1) == "{" then
     return parse_gdb_status_attributes(value:sub(2))
@@ -116,9 +124,12 @@ local function parse_gdb_status_value(value)
   return nil
 end
 
-local function parse_gdb_status_array(values)
+parse_gdb_status_array = function(values)
   local array = { }
   local offset = 1
+  if values:sub(offset, offset) == "]" then
+    return array
+  end
   while true do
     local value, length = parse_gdb_status_value(values:sub(offset))
     table.insert(array, value)
@@ -127,23 +138,23 @@ local function parse_gdb_status_array(values)
       offset = offset + 1
     elseif values:sub(offset, offset) == "]" then
       return array, offset+1
-    else
-      print("wtf")
     end
   end
 end
 
 
-local function parse_gdb_status_attributes(attributes)
+parse_gdb_status_attributes = function(attributes)
   local obj = { }
-  local equal_idx = attributes:find("=")
-  local attr_name = attributes:sub(1, equal_idx-1)
   local offset = 1
   while true do
-    local attr_value
-    attr_value, length = parse_gdb_status_value(attributes:sub(equal_idx+1))
+    local equal_idx = attributes:find("=", offset)
+    local attr_name = attributes:sub(offset, equal_idx-1)
+    local attr_value, length = parse_gdb_status_value(attributes:sub(equal_idx+1))
+    if not length then
+      return obj, offset + 1
+    end
     obj[attr_name] = attr_value
-    offset = offset + length
+    offset = length + equal_idx + 1
     if attributes:sub(offset, offset) == "," then
       offset = offset + 1
     else
@@ -155,13 +166,17 @@ end
 
 local function parse_gdb_status_line(line)
   local idx = line:find(",")
-  return line:sub(1, 1), line:sub(1, idx - 1), parse_gdb_status_attributes(line:sub(idx+1))
+  local type = line:sub(1, 1)
+  if idx and type == "*" or type == "=" then
+    return type, line:sub(2, idx - 1), parse_gdb_status_attributes(line:sub(idx+1))
+  else
+    return type
+  end
 end
-
 
 local function run_program(program)
   core.add_thread(function()
-    running_program = system.popen("gdb -q -nx --interpreter=mi --args " .. program)
+    running_program = system.popen("gdb", "-q", "-nx", "--interpreter=mi", "--args", program)
     running_program_state = "init"
     for file, v in pairs(breakpoints) do
       for line, v in pairs(breakpoints[file]) do
@@ -169,24 +184,20 @@ local function run_program(program)
       end
     end
     local result = ""
+    local resume_on_pause = false
     waiting_on_result = function(type, category, attributes)
       running_program_state = "stopped"
-      print("SETTING TO STOP")
       table.insert(command_queue, { "start", nil })
+      table.insert(command_queue, { "cont", nil })
     end
     while result ~= nil do
-      print("K")
       result = running_program:read()
-      print("RESULT" .. type(result))
-      print(result)
       if result ~= nil and #result > 0 then
         local offset = 1
         while offset < #result do
-          local newline = result:find("\n") or #result
-          print("KA: " .. result:sub(offset, newline-1))
+          local newline = result:find("\n", offset) or #result
           local type, category, attributes = parse_gdb_status_line(result:sub(offset, newline-1))
-          print("TYPE" .. type)
-          print("CATEGORY" .. category)
+          offset = newline + 1 
           if type == "*" then
             running_program_state = category
           end
@@ -194,30 +205,32 @@ local function run_program(program)
             waiting_on_result(type, category, attributes)
             waiting_on_result = nil
           elseif type == "*" and category == "stopped" and attributes["frame"] then
-            set_execution_point(attributes["frame"]["fullname"], attributes["frame"]["line"])
+            set_execution_point(attributes["frame"]["fullname"], tonumber(attributes["frame"]["line"]))
+          elseif type == "*" and category == "running" then
+            set_execution_point(nil)
           end
         end
       end
       if not waiting_on_result and #command_queue > 0 then
         if running_program_state == "running" then
           running_program:signal("SIGINT")
+          resume_on_pause = true
           running_program_state = "interrupting"
         elseif running_program_state == "stopped" then
-          print("WATA " .. command_queue[1][1])
-          if running_program:write(command_queue[1][1]) then
-            print("WRITTEN")
+          if running_program:write(command_queue[1][1] .. "\n") then
             if command_queue[1][2] then
-              waiting_on_results = command_queue[1][2]
+              waiting_on_result = command_queue[1][2]
             end
             table.remove(command_queue, 1)
-          else
-            print("NOT WRITTEN")
+            if #command_queue == 0 and resume_on_pause then
+              table.insert(command_queue, { "cont", nil })
+              resume_on_pause = false
+            end
           end
         end
       end
       coroutine.yield(config.debugger_interval or 0.2)
     end
-    print("DONE")
   end)
 end
 

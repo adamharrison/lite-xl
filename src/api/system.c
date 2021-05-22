@@ -633,13 +633,18 @@ static int f_popen_signal(lua_State* L) {
 // Small routine to allow for bi-directional process communications.
 // Intended to be used for non-blocking reads/writes in a coroutine.
 static int f_popen(lua_State* L) {
-  const char* cmd = luaL_checkstring(L, -1);
+  size_t arg_len = lua_gettop(L);
+  const char* cmd = luaL_checkstring(L, 1);
   #ifdef _WIN32
     return luaL_error(L, "posix systems only");
   #else
     int inpipefd[2], outpipefd[2];
     if (pipe(inpipefd) || pipe(outpipefd))
       return luaL_error(L, "couldn't create pipes");
+    char* buffer[arg_len+1];
+    for (int i = 0; i < arg_len; ++i)
+      buffer[i] = (char*)luaL_checkstring(L, i+1);
+    buffer[arg_len] = NULL;
     pid_t pid = fork();
     if (pid == -1) {
       for (int i = 0; i < 2; ++i) {
@@ -651,7 +656,7 @@ static int f_popen(lua_State* L) {
       dup2(outpipefd[0], STDIN_FILENO);
       dup2(inpipefd[1], STDOUT_FILENO);
       prctl(PR_SET_PDEATHSIG, SIGTERM);
-      execlp("sh", __FILE__, "-c", cmd, NULL);
+      execvp(cmd, buffer);
       exit(-1);
     }
     close(outpipefd[0]);
