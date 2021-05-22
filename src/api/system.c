@@ -580,7 +580,7 @@ static int f_set_window_opacity(lua_State *L) {
 }
 
 #ifndef _WIN32
-static int f_popen_read(lua_State* L) {
+static int f_pread(lua_State* L) {
   char buffer[10*1024];
   lua_getfield(L, -1, "i");
   int inputfd = (int)(long long)lua_touserdata(L, -1);
@@ -598,7 +598,7 @@ static int f_popen_read(lua_State* L) {
   lua_pushlstring(L, buffer, len);
   return 1;
 }
-static int f_popen_write(lua_State* L) {
+static int f_pwrite(lua_State* L) {
   size_t str_len;
   const char* str = luaL_checklstring(L, -1, &str_len);
   lua_getfield(L, -2, "o");
@@ -612,7 +612,7 @@ static int f_popen_write(lua_State* L) {
   lua_pushnumber(L, len);
   return 1;
 }
-static int f_popen_signal(lua_State* L) {
+static int f_psignal(lua_State* L) {
   size_t str_len;
   const char* str = luaL_checklstring(L, -1, &str_len);
   lua_getfield(L, -2, "p");
@@ -662,7 +662,9 @@ static int f_popen(lua_State* L) {
     close(outpipefd[0]);
     close(inpipefd[1]);
     fcntl(inpipefd[0], F_SETFL, fcntl(inpipefd[0], F_GETFL, 0) | O_NONBLOCK);
-    fcntl(outpipefd[1], F_SETFL, fcntl(outpipefd[1], F_GETFL, 0) | O_NONBLOCK);    
+    fcntl(outpipefd[1], F_SETFL, fcntl(outpipefd[1], F_GETFL, 0) | O_NONBLOCK);  
+    lua_pushlightuserdata(L, (void*)(long long)inpipefd[0]);
+    lua_pushlightuserdata(L, (void*)(long long)outpipefd[1]);
     lua_newtable(L);
     lua_pushcfunction(L, f_popen_read);
     lua_setfield(L, -2, "read");
@@ -672,11 +674,9 @@ static int f_popen(lua_State* L) {
     lua_setfield(L, -2, "signal");
     lua_pushnumber(L, pid);
     lua_setfield(L, -2, "p");
-    lua_pushlightuserdata(L, (void*)(long long)inpipefd[0]);
     lua_setfield(L, -2, "i");
-    lua_pushlightuserdata(L, (void*)(long long)outpipefd[1]);
     lua_setfield(L, -2, "o");
-    return 1;
+    return 2;
   #endif 
 }
 
@@ -705,7 +705,11 @@ static const luaL_Reg lib[] = {
   { "exec",                f_exec                },
   { "fuzzy_match",         f_fuzzy_match         },
   { "set_window_opacity",  f_set_window_opacity  },
-  { "popen",               f_popen  },
+  { "popen",               f_popen               },
+  { "psignal",             f_psignal             },
+  { "pread",               f_pread               },
+  { "pwrite",              f_pwrite              },
+  
   { NULL, NULL }
 };
 
