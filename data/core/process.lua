@@ -15,11 +15,11 @@ end
 process.read = function(self, length)
   return system.pread(self.input)
 end
-process.terminate = function() 
+process.terminate = function(self) 
   self:signal("TERM")
   system.pclose(self.input, self.output)
 end
-process.kill = function() 
+process.kill = function(self) 
   self:signal("KILL")
   system.pclose(self.input, self.output)
 end
