@@ -141,12 +141,131 @@ function DocView:draw_line_gutter(idx, x, y)
   draw_line_gutter(self, idx, x, y)
 end
 
+local WatchResultView = View:extend()
+function WatchResultView:new(watch_variable_view)
+  WatchResultView.super.new(self)
+  self.results = { }
+  self.visible = true
+  self.watch_variable_view = watch_variable_view
+  self.target_size = 50
+  self.init_size = true
+end
+function WatchResultView:update()
+  local dest = self.visible and self.target_size or 0
+  if self.init_size then
+    self.size.y = dest
+    self.init_size = false
+  else
+    self:move_towards(self.size, "y", dest)
+  end
+  WatchResultView.super.update(self)
+end
+function WatchResultView:set_target_size(axis, value)
+  if axis == "y" then
+    self.target_size = value
+    return true
+  end
+end
+function WatchResultView:get_item_height() return style.font:get_height() end
+function WatchResultView:get_scrollable_size() return 0 end
+function WatchResultView:draw()
+  self:draw_background(style.background2)
+  local h = style.font:get_height()
+  local ox, oy = self:get_content_offset()
+  for i,v in ipairs(self.results) do
+    local yoffset = (i-1) * style.font:get_height()
+    common.draw_text(style.code_font, style.text, v, "left", ox + style.padding.x, oy + yoffset, 0, h)
+  end
+end
+function WatchResultView:refresh(idx)
+  if debugger.active_debugger then
+    if idx then
+      self.results[idx] = ""
+    else
+      self.results = { }
+    end
+    local lines = self.watch_variable_view.doc.lines
+    for i = 1, #lines do
+      if lines[i]:find("%S") and not idx or idx == i then
+        debugger.print(lines[i], function(result)
+          self.results[i] = result
+        end)
+      end
+    end
+  else
+    self.results = { }
+  end
+end
+
+
+local WatchVariableDoc = Doc:extend()
+function WatchVariableDoc:new(variable_view)
+  WatchVariableDoc.super.new(self)
+  self.variable_view = variable_view
+end
+function WatchVariableDoc:text_input(text)
+  if self:has_selection() then
+    self:delete_to()
+  end
+  local newline = text:find("\n")
+  if newline then
+    local line, col = self:get_selection()
+    self:insert(line, col, text:sub(1, newline))
+    self:move_to(newline-1)
+    self.variable_view.result_view:refresh(line)
+    core.set_active_view(core.root_view)
+  else
+    local line, col = self:get_selection()
+    self:insert(line, col, text)
+    self:move_to(#text)
+  end
+end
+function WatchVariableDoc:set_selection(line1, col1, line2, col2, swap)
+  assert(not line2 == not col2, "expected 2 or 4 arguments")
+  if swap then line1, col1, line2, col2 = line2, col2, line1, col1 end
+  line1, col1 = self:sanitize_position(line1, col1)
+  line2, col2 = self:sanitize_position(line2 or line1, col2 or col1)
+  if line2 > line1 then
+    line2 = line1
+    col2 = #self.lines[line1] - 1
+  end
+  self.selection.a.line, self.selection.a.col = line1, col1
+  self.selection.b.line, self.selection.b.col = line2, col2
+end
+local WatchVariableView = DocView:extend()
+function WatchVariableView:new()
+  WatchVariableView.super.new(self, WatchVariableDoc(self))
+  self.visible = true
+  self.target_size = 50
+  self.init_size = true
+  self.result_view = nil
+end
+function WatchVariableView:set_target_size(axis, value)
+  if axis == "y" then
+    self.target_size = value
+    return true
+  end
+end
+function WatchVariableView:try_close(do_close) end
+function WatchVariableView:get_scrollable_size() return 0 end
+function WatchVariableView:get_gutter_width() return 0 end
+function WatchVariableView:draw_line_gutter(idx, x, y) end
+function WatchVariableView:get_line_screen_position(idx)
+  local x, y = self:get_content_offset()
+  return x + self:get_gutter_width(), y + (idx-1)
+end
+function WatchVariableView:draw_line_body(idx, x, y)
+  WatchVariableView.super.draw_line_body(self, idx, x + style.padding.x, y)
+  renderer.draw_rect(x - self:get_gutter_width(), y + self:get_line_height(), self.size.x, 1, style.divider)
+end
+
+
 local StackView = View:extend()
 
 function StackView:new()
   StackView.super.new(self)
   self.stack = { }
-  self.visible = false
+  self.visible = true
   self.target_size = 50
   self.scrollable = true
   self.init_size = true
@@ -217,9 +336,16 @@ function StackView:draw()
   self:draw_scrollbar()
 end
 
+
 local stack_view = StackView()
+local watch_variable_view = WatchVariableView()
+local watch_result_view = WatchResultView(watch_variable_view)
+watch_variable_view.result_view = watch_result_view
 local node = core.root_view:get_active_node()
 local stack_view_node = node:split("down", stack_view, { y = true }, true)
+local watch_variable_view_node = stack_view_node:split("right", watch_variable_view, { y = true }, true)
+local watch_result_view_node = watch_variable_view_node:split("right", watch_result_view, { y = true }, true)
+
 
 -- GDB Specific Stuff
 local function gdb_parse_string(str) 
@@ -295,7 +421,12 @@ local function gdb_parse_status_line(line)
   elseif type == "~" then
     return type, gdb_parse_string(line:sub(3))
   elseif type == "^" then
-    return type, line:sub(2)
+    local quote = line:find('"')
+    if idx and (not quote or idx < quote) then
+      return type, line:sub(2, idx - 1), gdb_parse_status_attributes(line:sub(idx+1))
+    else
+      return type, line:sub(2)
+    end
   else
     return type
   end
@@ -324,6 +455,18 @@ function debugger.backends.gdb:step_out()
 end
 function debugger.backends.gdb:continue()
   self:cmd("cont")
+end
+function debugger.backends.gdb:print(expr, on_finish) 
+  self:cmd("p " .. expr, function(t, category, result)
+    if result and type(result) == "table" then
+      local equals = result[1] and result[1]:find("=")
+      if equals then
+        on_finish(result[1]:sub(equals+1))
+      else
+        on_finish(result[1])
+      end
+    end
+  end)
 end
 function debugger.backends.gdb:attach(pid)
   
@@ -358,6 +501,8 @@ function debugger.backends.gdb:remove_breakpoint(file, line)
   end
 end
 
+config.debugger_step_refresh_watches = true
+
 function debugger.backends.gdb:run(program)
   debugger.output("Running GDB on " .. program .. ".")
   stack_view.set_stack({ })
@@ -386,15 +531,14 @@ function debugger.backends.gdb:run(program)
         while offset < #result do
           local newline = result:find("\n", offset) or #result
           local line = result:sub(offset, newline-1)
-          --debugger.output(line)
           local type, category, attributes = gdb_parse_status_line(line)
           offset = newline + 1 
           if type == "*" then
             running_program_state = category
           end
-          if type == "^" and category == "done" then
-            if waiting_on_result then
-              waiting_on_result(type, category, accumulator)
+          if type == "^" then
+            if (category == "done" or category == "error") and waiting_on_result then
+              waiting_on_result(type, category, category == "error" and attributes["msg"] or accumulator)
             end
             waiting_on_result = nil
             accumulator = {}
@@ -407,6 +551,9 @@ function debugger.backends.gdb:run(program)
             waiting_on_result = nil
           elseif type == "*" and category == "stopped" and attributes["frame"] and attributes["bkptno"] ~= "1" and not resume_on_pause then
             debugger.set_execution_point(attributes["frame"]["fullname"], tonumber(attributes["frame"]["line"]))
+            if config.debugger_step_refresh_watches then
+              watch_result_view:refresh()
+            end
             accumulator = {}
             self:cmd("backtrace", function(type, category, frames)
               local stack = { }
@@ -424,11 +571,14 @@ function debugger.backends.gdb:run(program)
                 end
               end
               stack_view:set_stack(stack)
+              stack_view.visible = true
             end)
           elseif type == "*" and category == "stopped" and attributes["reason"] == "exited-normally" then
             self:cmd("quit")
           elseif type == "*" and category == "running" then
             debugger.set_execution_point(nil)
+            stack_view.set_stack({ })
+            stack_view.visible = false
           end
         end
       end
@@ -494,8 +644,10 @@ command.add(nil, {
   ["debugger:quit"] = function()    
     debugger.terminate()
   end,
-  ["debugger:toggle-stackview"] = function()    
+  ["debugger:toggle-debugger-drawer"] = function()    
     stack_view.visible = not stack_view.visible
+    watch_variable_view.visible = not watch_variable_view.visible
+    watch_result_view.visible = not watch_result_view.visible
   end
 })
 
