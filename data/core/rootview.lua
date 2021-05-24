@@ -616,9 +616,6 @@ function Node:is_resizable(axis)
   if self.type == 'leaf' then
     return not self.locked or not self.locked[axis] or self.resizable
   else
-    if self.type == (axis == "x" and "hsplit" or "vsplit") then
-      return true
-    end
     return self.a:is_resizable(axis) and self.b:is_resizable(axis)
   end
 end
