@@ -4,7 +4,6 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <errno.h>
-#include <signal.h>
 #include <sys/stat.h>
 #include "api.h"
 #include "rencache.h"
@@ -12,6 +11,7 @@
   #include <direct.h>
   #include <windows.h>
 #else
+  #include <signal.h>
   #include <sys/prctl.h>
   #include <fcntl.h>
 #endif
