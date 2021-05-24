@@ -579,7 +579,6 @@ static int f_set_window_opacity(lua_State *L) {
   return 1;
 }
 
-#ifndef _WIN32
 static int f_pread(lua_State* L) {
   char buffer[10*1024];
   int inputfd = (int)(long long)lua_touserdata(L, 1);
@@ -607,6 +606,8 @@ static int f_pwrite(lua_State* L) {
   lua_pushnumber(L, len);
   return 1;
 }
+
+#ifndef _WIN32
 static int f_psignal(lua_State* L) {
   pid_t pid = luaL_checknumber(L, 1);
   const char* str = luaL_checkstring(L, 2);
@@ -619,16 +620,57 @@ static int f_psignal(lua_State* L) {
 
 static int f_pclose(lua_State* L) {
   for (int i = 1; i <= lua_gettop(L); ++i)
-    close((int)(long long)lua_touserdata(L, i));
+  #ifdef _WIN32
+    CloseHandle((HANDLE)lua_touserdata(L, i))
+  #else
+    close((int)(long long)lua_touserdata(L, i));    
+  #endif
   return 0;
 }
 
 static int f_popen(lua_State* L) {
   size_t arg_len = lua_gettop(L);
-  const char* cmd = luaL_checkstring(L, 1);
   #ifdef _WIN32
-    return luaL_error(L, "posix systems only");
+    char buffer[MAX_PATH] = "";
+    for (int i = 0; i < arg_len; ++i) {
+      if (i > 0)
+        strcat(buffer, " ");
+      strcat(buffer, (char*)luaL_checkstring(L, i+1));
+    }
+    HANDLE inpipefd[2], outpipefd[2];
+    SECURITY_ATTRIBUTES saAttr; 
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
+    saAttr.bInheritHandle = TRUE; 
+    saAttr.lpSecurityDescriptor = NULL; 
+    if (
+      !CreatePipe(&inpipefd[0], &inpipefd[1], &saAttr, 0) || 
+      !CreatePipe(&outpipefd[0], &outpipefd[1], &saAttr, 0)) {
+        return luaL_error(L, "couldn't create pipes");
+    }
+    SetHandleInformation(inpipefd[0], HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(outpipefd[1], HANDLE_FLAG_INHERIT, 0);
+    
+    PROCESS_INFORMATION piProcInfo; 
+    STARTUPINFO siStartInfo;
+    ZeroMemory( &piProcInfo, sizeof(PROCESS_INFORMATION) );
+    ZeroMemory( &siStartInfo, sizeof(STARTUPINFO) );
+    siStartInfo.cb = sizeof(STARTUPINFO); 
+    siStartInfo.hStdError = inputfd[1];
+    siStartInfo.hStdOutput = inputfd[1];
+    siStartInfo.hStdInput = outputfd[0];
+    siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
+    if (!CreateProcess(NULL, buffer, NULL, NULL, TRUE, 0, NULL, NULL, &siStartInfo, &piProcInfo)) 
+      return luaL_error(L, "couldn't create process");
+    CloseHandle(piProcInfo.hProcess);
+    CloseHandle(piProcInfo.hThread);
+    CloseHandle(inpipefd[1]);
+    CloseHandle(outpipefd[0]);
+    lua_pushnumber(L, dwProcessId);
+    lua_pushlightuserdata(L, inpipefd[0]);
+    lua_pushlightuserdata(L, outpipefd[1]);
+    return 3;
   #else
+    const char* cmd = luaL_checkstring(L, 1);
     int inpipefd[2], outpipefd[2];
     if (pipe(inpipefd) || pipe(outpipefd))
       return luaL_error(L, "couldn't create pipes");
@@ -688,9 +730,11 @@ static const luaL_Reg lib[] = {
   { "set_window_opacity",  f_set_window_opacity  },
   { "popen",               f_popen               },
   { "pclose",              f_pclose              },  
-  { "psignal",             f_psignal             },
   { "pread",               f_pread               },
   { "pwrite",              f_pwrite              },
+#ifndef _WIN32
+  { "psignal",             f_psignal             },
+#endif
   
   { NULL, NULL }
 };
