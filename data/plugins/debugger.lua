@@ -20,8 +20,12 @@ local debugger = {}
 style.debugger_breakpoint = { common.color "#ca3434" }
 style.debugger_execution_point = { common.color "#3434ca" }
 
+-- Config variables.
 debugger.step_refresh_watches = true
 debugger.interval = 0.1
+debugger.drawer_size = 100
+
+-- Internals.
 debugger.breakpoints = { }
 debugger.execution_point = nil
 debugger.backends = { }
@@ -145,6 +149,10 @@ function debugger.set_state(state, transition, hint)
         end
         debugger.toggle_drawer(true)
       end
+    elseif state == "done" then
+      debugger.stack_view.set_stack({ })
+      debugger.watch_result_view.refresh()
+      debugger.toggle_drawer(false)
     end
     debugger.state = state
   end
@@ -159,7 +167,6 @@ function DocView:on_mouse_moved(x, y, ...)
     self.cursor = "arrow"
   end
 end
-
 function DocView:on_mouse_pressed(button, x, y, clicks)
   on_mouse_pressed(self, button, x, y, clicks)
   local minline, maxline = self:get_visible_line_range()
@@ -168,7 +175,6 @@ function DocView:on_mouse_pressed(button, x, y, clicks)
     debugger.toggle_breakpoint(self.doc.abs_filename, minline + math.floor((y - docy) / self:get_line_height()))
   end
 end
-
 function DocView:draw_line_gutter(idx, x, y)  
    if debugger.has_breakpoint(self.doc.abs_filename, idx) then
      renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.debugger_breakpoint)
@@ -183,7 +189,7 @@ local DebuggerWatchResultView = View:extend()
 function DebuggerWatchResultView:new()
   DebuggerWatchResultView.super.new(self)
   self.results = { }
-  self.target_size = 50
+  self.target_size = debugger.drawer_size
   self.init_size = true
 end
 function DebuggerWatchResultView:update()
@@ -215,7 +221,7 @@ function DebuggerWatchResultView:draw()
   end
 end
 function DebuggerWatchResultView:refresh(idx)
-  if debugger.active_debugger then
+  if debugger.active_debugger and debugger.is_running() then
     local lines = debugger.watch_variable_view.doc.lines
     local total_lines = lines[1]:find("%S") and #lines or 0
     if idx then
@@ -247,9 +253,19 @@ function DebuggerWatchVariableDoc:text_input(text)
   local newline = text:find("\n")
   if newline then
     local line, col = self:get_selection()
-    self:insert(line, col, text:sub(1, newline))
-    self:move_to(newline-1)
-    debugger.watch_result_view:refresh(line)
+    
+    if #text == 1 and col == 1 and #self.lines[line] == 1 then
+      if #debugger.watch_result_view.results >= line then
+        table.remove(debugger.watch_result_view.results, line)
+      end
+      if #self.lines > line then
+        self:raw_remove(line, 1, line+1, 1, self.undo_stack, system.get_time())
+      end
+    else
+      self:insert(line, col, text:sub(1, newline))
+      self:move_to(newline-1)
+      debugger.watch_result_view:refresh(line)
+    end
     core.set_active_view(core.root_view)
   else
     local line, col = self:get_selection()
@@ -257,15 +273,28 @@ function DebuggerWatchVariableDoc:text_input(text)
     self:move_to(#text)
   end
 end
+function Doc:delete_to(...)
+  local line, col = self:get_selection(true)
+  if self:has_selection() then
+    self:remove(self:get_selection())
+  elseif col > 1 then
+    local line2, col2 = self:position_offset(line, col, ...)
+    self:remove(line, col, line2, col2)
+    line, col = sort_positions(line, col, line2, col2)
+  end
+  self:set_selection(line, col)
+end
 function DebuggerWatchVariableDoc:remove(line1, col1, line2, col2)
-  DebuggerWatchVariableDoc.super.remove(self, line1, col1, line2, col2)
+  if line1 == line2 then
+    DebuggerWatchVariableDoc.super.remove(self, line1, col1, line2, col2)
+  end
 end
 function DebuggerWatchVariableDoc:set_selection(line1, col1, line2, col2, swap)
   assert(not line2 == not col2, "expected 2 or 4 arguments")
   if swap then line1, col1, line2, col2 = line2, col2, line1, col1 end
   line1, col1 = self:sanitize_position(line1, col1)
   line2, col2 = self:sanitize_position(line2 or line1, col2 or col1)
-  if line2 > line1 then
+  if line2 ~= line1 then
     line2 = line1
     col2 = #self.lines[line1] - 1
   end
@@ -275,7 +304,7 @@ end
 local DebuggerWatchVariableView = DocView:extend()
 function DebuggerWatchVariableView:new()
   DebuggerWatchVariableView.super.new(self, DebuggerWatchVariableDoc(self))
-  self.target_size = 50
+  self.target_size = debugger.drawer_size
   self.init_size = true
 end
 function DebuggerWatchVariableView:set_target_size(axis, value)
@@ -296,14 +325,14 @@ function DebuggerWatchVariableView:get_content_offset(...)
 end
 function DebuggerWatchVariableView:get_line_screen_position(idx)
   local x, y = self:get_content_offset()
-  return x + self:get_gutter_width(), y + (idx-1)
+  return x + self:get_gutter_width() + style.padding.x, y + (idx-1)
 end
 function DebuggerWatchVariableView:draw_line_body(idx, x, y)
-  DebuggerWatchVariableView.super.draw_line_body(self, idx, x + style.padding.x, y)
+  DebuggerWatchVariableView.super.draw_line_body(self, idx, x, y)
   if idx == 1 then
-    renderer.draw_rect(x - self:get_gutter_width(), y, self.size.x, 1, style.divider)  
+    renderer.draw_rect(x - self:get_gutter_width() - style.padding.x, y, self.size.x, 1, style.divider)  
   end
-  renderer.draw_rect(x - self:get_gutter_width(), y + self:get_line_height(), self.size.x, 1, style.divider)
+  renderer.draw_rect(x - self:get_gutter_width() - style.padding.x, y + self:get_line_height(), self.size.x, 1, style.divider)
 end
 function DebuggerWatchVariableView:draw()
   DebuggerWatchVariableView.super.draw(self)
@@ -319,7 +348,7 @@ local DebuggerStackView = View:extend()
 function DebuggerStackView:new()
   DebuggerStackView.super.new(self)
   self.stack = { }
-  self.target_size = 50
+  self.target_size = debugger.drawer_size
   self.scrollable = true
   self.init_size = true
   self.hovered_frame = nil
@@ -412,7 +441,7 @@ local function gdb_parse_string(str)
   while offset ~= nil do
     offset = str:find('"', offset+1)
     if offset and str:sub(offset - 1, offset - 1) ~= "\\" then
-      return str:sub(1, offset - 1), offset + 1
+      return str:sub(1, offset - 1):gsub("\\\"", "\""), offset + 1
     end
   end
 end
@@ -472,7 +501,6 @@ gdb_parse_status_attributes = function(attributes)
 end
 
 local function gdb_parse_status_line(line)
-  print(line)
   local idx = line:find(",")
   local type = line:sub(1, 1)
   if idx and type == "*" or type == "=" then
@@ -519,6 +547,8 @@ function debugger.backends.gdb:print(expr, on_finish)
       else
         on_finish(result[1])
       end
+    else
+        on_finish(result)    
     end
   end)
 end
@@ -647,9 +677,9 @@ function debugger.backends.gdb:run(program)
       end
       coroutine.yield(debugger.interval)
     end
-    debugger.output("GDB finished running " .. program .. ".")
+    debugger.output("Finished running " .. program .. ".")
     self.running_program = nil
-    debugger.toggle_drawer(false)
+    debugger.set_state("done")
   end)
 end
 
