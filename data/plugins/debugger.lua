@@ -120,7 +120,7 @@ function debugger.set_execution_point(file, line)
   end
 end
 
-function debugger.set_state(state, transition)
+function debugger.set_state(state, transition, hint)
   if state ~= debugger.state then
     debugger.output("Setting debugger state to " .. state)
     if transition == nil or transition then
@@ -131,16 +131,24 @@ function debugger.set_state(state, transition)
         if debugger.step_refresh_watches then
           debugger.watch_result_view:refresh()
         end
-        debugger.stack_view:refresh(function(backtrace) 
-          debugger.set_execution_point(backtrace[1][2], backtrace[1][3])
-        end)
+        if debugger.stack_view.stack and hint and hint.frame and 
+          #debugger.stack_view.stack > 0 and debugger.stack_view.stack[1][1] and
+          hint.frame[1] == debugger.stack_view.stack[1][1] and 
+          hint.frame[2] == debugger.stack_view.stack[1][3]
+        then
+          debugger.stack_view.stack[1][4] = hint.frame[3]
+          debugger.set_execution_point(hint.frame[2], hint.frame[3])
+        else
+          debugger.stack_view:refresh(function(backtrace) 
+            debugger.set_execution_point(backtrace[1][3], backtrace[1][4])
+          end)
+        end
         debugger.toggle_drawer(true)
       end
     end
     debugger.state = state
   end
 end
-
 
 --------------------------- UI Elements
 function DocView:on_mouse_moved(x, y, ...)
@@ -198,10 +206,11 @@ function DebuggerWatchResultView:get_item_height() return style.font:get_height(
 function DebuggerWatchResultView:get_scrollable_size() return 0 end
 function DebuggerWatchResultView:draw()
   self:draw_background(style.background2)
-  local h = style.font:get_height()
+  local h = style.code_font:get_height()
   local ox, oy = self:get_content_offset()
+  common.draw_text(style.font, style.text, "Watch Values", "left", ox + style.padding.x, oy, self.size.x, h)
   for i,v in ipairs(self.results) do
-    local yoffset = (i-1) * style.font:get_height()
+    local yoffset = i * style.font:get_height()
     common.draw_text(style.code_font, style.text, v, "left", ox + style.padding.x, oy + yoffset, 0, h)
   end
 end
@@ -248,6 +257,9 @@ function DebuggerWatchVariableDoc:text_input(text)
     self:move_to(#text)
   end
 end
+function DebuggerWatchVariableDoc:remove(line1, col1, line2, col2)
+  DebuggerWatchVariableDoc.super.remove(self, line1, col1, line2, col2)
+end
 function DebuggerWatchVariableDoc:set_selection(line1, col1, line2, col2, swap)
   assert(not line2 == not col2, "expected 2 or 4 arguments")
   if swap then line1, col1, line2, col2 = line2, col2, line1, col1 end
@@ -276,13 +288,30 @@ function DebuggerWatchVariableView:try_close(do_close) end
 function DebuggerWatchVariableView:get_scrollable_size() return 0 end
 function DebuggerWatchVariableView:get_gutter_width() return 0 end
 function DebuggerWatchVariableView:draw_line_gutter(idx, x, y) end
+
+--  common.draw_text(style.code_font, style.text, "Watch Values", "left", ox + style.padding.x, oy, self.size.x, h)
+function DebuggerWatchVariableView:get_content_offset(...)
+  local x, y = DebuggerWatchVariableView.super.get_content_offset(self, ...)
+  return x, y + self:get_line_height()
+end
 function DebuggerWatchVariableView:get_line_screen_position(idx)
   local x, y = self:get_content_offset()
   return x + self:get_gutter_width(), y + (idx-1)
 end
 function DebuggerWatchVariableView:draw_line_body(idx, x, y)
   DebuggerWatchVariableView.super.draw_line_body(self, idx, x + style.padding.x, y)
+  if idx == 1 then
+    renderer.draw_rect(x - self:get_gutter_width(), y, self.size.x, 1, style.divider)  
+  end
   renderer.draw_rect(x - self:get_gutter_width(), y + self:get_line_height(), self.size.x, 1, style.divider)
+end
+function DebuggerWatchVariableView:draw()
+  DebuggerWatchVariableView.super.draw(self)
+  local ox, oy = self:get_content_offset()
+  common.draw_text(style.font, style.text, "Watch Expressions", "left", ox + style.padding.x, oy - self:get_line_height(), self.size.x, self:get_line_height())
+end
+function DebuggerWatchVariableView:draw_background(color)
+  DebuggerWatchVariableView.super.draw_background(self, style.background3)
 end
 
 
@@ -319,16 +348,16 @@ function DebuggerStackView:set_stack(stack)
   core.redraw = true
 end
 function DebuggerStackView:get_item_height()
-  return style.font:get_height() + style.padding.y*2
+  return style.code_font:get_height() + style.padding.y*2
 end
 function DebuggerStackView:get_scrollable_size()
-  return #self.stack and self:get_item_height() * #self.stack
+  return #self.stack and self:get_item_height() * (#self.stack + 1)
 end
 function DebuggerStackView:on_mouse_moved(px, py, ...)
   DebuggerStackView.super.on_mouse_moved(self, px, py, ...)
   if self.dragging_scrollbar then return end
   local ox, oy = self:get_content_offset()
-  local offset = math.floor((py - oy) / self:get_item_height()) + 1
+  local offset = math.floor((py - oy) / self:get_item_height())
   self.hovered_frame = offset >= 1 and offset <= #self.stack and offset
 end
 function DebuggerStackView:on_mouse_pressed(button, x, y, clicks)
@@ -340,21 +369,23 @@ function DebuggerStackView:on_mouse_pressed(button, x, y, clicks)
     if clicks >= 2 then
       debugger.frame(self.hovered_frame - 1)
       self.active_frame = self.hovered_frame
-      debugger.set_execution_point(self.stack[self.hovered_frame][2], self.stack[self.hovered_frame][3])
+      debugger.set_execution_point(self.stack[self.hovered_frame][3], self.stack[self.hovered_frame][4])
     end
-    jump_to_file(self.stack[self.hovered_frame][2], self.stack[self.hovered_frame][3])
+    jump_to_file(self.stack[self.hovered_frame][3], self.stack[self.hovered_frame][4])
   end
 end
 function DebuggerStackView:draw()
-  self:draw_background(style.background2)
-  local h = style.font:get_height()
+  self:draw_background(style.background3)
+  local h = style.code_font:get_height()
+  local item_height = self:get_item_height()
   local ox, oy = self:get_content_offset()
+  common.draw_text(style.font, style.text, "Stack Trace", "left", ox + style.padding.x, oy, 0, h)
   for i,v in ipairs(self.stack) do
-    local yoffset = style.padding.y + (i-1) * (style.font:get_height() + style.padding.y * 2)
+    local yoffset = style.padding.y + (i - 1)*item_height + style.padding.y + h
     if self.hovered_frame == i or self.active_frame == i then
       renderer.draw_rect(ox, oy + yoffset - style.padding.y, self.size.x, h + style.padding.y*2, style.line_highlight)
     end
-    common.draw_text(style.code_font, style.text, "#" .. i .. " " .. v[1] .. " " .. v[2] .. (v[3] and (" line " .. v[3]) or ""), "left", ox + style.padding.x, oy + yoffset, 0, h)
+    common.draw_text(style.code_font, style.text, "#" .. i .. " " .. v[1] .. " " .. v[2] .. " " .. v[3] .. (v[4] and (" line " .. v[4]) or ""), "left", ox + style.padding.x, oy + yoffset, 0, h)
   end
   self:draw_scrollbar()
 end
@@ -495,16 +526,15 @@ function debugger.backends.gdb:backtrace(on_finish)
   self:cmd("backtrace", function(type, category, frames)
     local stack = { }
     for i,v in ipairs(frames) do
-      local s,e = string.find(v, " at ")
+      local str = string.gsub(v, "[%xx]+ in ", "")
+      local s,e = str:find(" at ")
+      if not s then
+        s,e = str:find(" from ")
+      end
       if s then
-        local _, _, n, details = string.find(v:sub(1, s-1), "#(%d+)%s+(.+)")
-        local _, _, file, line = string.find(v:sub(e+1), "([^:]+):(%d+)")
-        table.insert(stack, {  details, file, tonumber(line) })
-      else
-        local s,e = string.find(v, " in ")
-        local _, _, n, details = string.find(v:sub(1, s-1), "#(%d+)%s+(.+)")
-        local file = v:sub(e + 1)
-        table.insert(stack, {  details, file, nil })
+        local _, _, n, func, args = string.find(str:sub(1, s-1), "#(%d+)%s+(%S+) (.+)")
+        local _, _, file, line = string.find(str:sub(e + 1), "([^:]+):?(%d*)")
+        table.insert(stack, { func, args, file:gsub("\\n", ""), line and tonumber(line) })
       end
     end
     on_finish(stack)
@@ -561,11 +591,17 @@ function debugger.backends.gdb:run(program)
           offset = newline + 1 
           if type == "*" then
             if category == "stopped" then
-              if attributes["reason"] == "exited-normally" then
+              if attributes.reason == "exited-normally" then
                 self:terminate()
-              elseif attributes["frame"] and attributes["bkptno"] == "1" then
+              elseif attributes.frame and attributes.bkptno == "1" then
                 resume_on_command_completion = true
                 debugger.set_state("stopped", false)
+              elseif attributes.reason == "end-stepping-range" and attributes.frame and attributes.frame.file and attributes.frame.line then
+                debugger.set_state("stopped", true, { frame = {
+                  attributes.frame.func,
+                  attributes.frame.file,
+                  tonumber(attributes.frame.line)
+                } })
               else
                 if not resume_on_command_completion then
                   debugger.set_state("stopped")
