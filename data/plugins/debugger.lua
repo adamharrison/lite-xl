@@ -20,15 +20,15 @@ local debugger = {}
 style.debugger_breakpoint = { common.color "#ca3434" }
 style.debugger_execution_point = { common.color "#3434ca" }
 
--- Hash of absolute filenames, and line numbers.
+debugger.step_refresh_watches = true
+debugger.interval = 0.1
 debugger.breakpoints = { }
--- 2 member table, absolute filename, line number.
 debugger.execution_point = nil
--- Backends are proper debuggers, like gdb or whatever clang's got.
 debugger.backends = { }
+debugger.drawer_visible = false
+debugger.state = nil
 debugger.output = function(line)
   core.log(line)
-  print(line)
 end
 debugger.active_debugger = nil
 setmetatable(debugger, { 
@@ -58,14 +58,19 @@ function debugger.run(path)
   end
 end
 
+function debugger.toggle_drawer(show)
+  if show == nil then
+    show = not debugger.drawer_visible
+  end
+  debugger.drawer_visible = show
+end
+
 function debugger.has_breakpoint(file, line)
   return debugger.breakpoints[file] and debugger.breakpoints[file][line] ~= nil
 end
 
 function debugger.add_breakpoint(file, line)
-  if not debugger.breakpoints[file] then
-    debugger.breakpoints[file] = { }
-  end
+  debugger.breakpoints[file] = debugger.breakpoints[file] or { }
   debugger.breakpoints[file][line] = true
   if debugger.active_debugger then
     debugger.active_debugger:add_breakpoint(file, line)
@@ -95,8 +100,10 @@ local function jump_to_file(file, line)
     for i = 1, #core.project_directories do
       if common.path_belongs_to(file, core.project_dir) then
         local view = core.root_view:open_doc(core.open_doc(file))
-        view:scroll_to_line(math.max(1, line - 20), true)
-        view.doc:set_selection(line, 1, line, 1)
+        if line then
+          view:scroll_to_line(math.max(1, line - 20), true)
+          view.doc:set_selection(line, 1, line, 1)
+        end
         break
       end
     end
@@ -106,13 +113,36 @@ end
 function debugger.set_execution_point(file, line)
   if file then
     debugger.execution_point = { file, line }
+    debugger.output("Setting execution point to " .. file .. (line and (":" .. line) or ""))
     jump_to_file(file, line)
   else
     debugger.execution_point = nil
   end
 end
 
+function debugger.set_state(state, transition)
+  if state ~= debugger.state then
+    debugger.output("Setting debugger state to " .. state)
+    if transition == nil or transition then
+      if state == "running" then
+        debugger.set_execution_point(nil)
+        debugger.toggle_drawer(false)
+      elseif state == "stopped" then
+        if debugger.step_refresh_watches then
+          debugger.watch_result_view:refresh()
+        end
+        debugger.stack_view:refresh(function(backtrace) 
+          debugger.set_execution_point(backtrace[1][2], backtrace[1][3])
+        end)
+        debugger.toggle_drawer(true)
+      end
+    end
+    debugger.state = state
+  end
+end
 
+
+--------------------------- UI Elements
 function DocView:on_mouse_moved(x, y, ...)
   on_mouse_moved(self, x, y, ...)
   local minline, maxline = self:get_visible_line_range()
@@ -141,34 +171,32 @@ function DocView:draw_line_gutter(idx, x, y)
   draw_line_gutter(self, idx, x, y)
 end
 
-local WatchResultView = View:extend()
-function WatchResultView:new(watch_variable_view)
-  WatchResultView.super.new(self)
+local DebuggerWatchResultView = View:extend()
+function DebuggerWatchResultView:new()
+  DebuggerWatchResultView.super.new(self)
   self.results = { }
-  self.visible = true
-  self.watch_variable_view = watch_variable_view
   self.target_size = 50
   self.init_size = true
 end
-function WatchResultView:update()
-  local dest = self.visible and self.target_size or 0
+function DebuggerWatchResultView:update()
+  local dest = debugger.drawer_visible and self.target_size or 0
   if self.init_size then
     self.size.y = dest
     self.init_size = false
   else
     self:move_towards(self.size, "y", dest)
   end
-  WatchResultView.super.update(self)
+  DebuggerWatchResultView.super.update(self)
 end
-function WatchResultView:set_target_size(axis, value)
+function DebuggerWatchResultView:set_target_size(axis, value)
   if axis == "y" then
     self.target_size = value
     return true
   end
 end
-function WatchResultView:get_item_height() return style.font:get_height() end
-function WatchResultView:get_scrollable_size() return 0 end
-function WatchResultView:draw()
+function DebuggerWatchResultView:get_item_height() return style.font:get_height() end
+function DebuggerWatchResultView:get_scrollable_size() return 0 end
+function DebuggerWatchResultView:draw()
   self:draw_background(style.background2)
   local h = style.font:get_height()
   local ox, oy = self:get_content_offset()
@@ -177,14 +205,15 @@ function WatchResultView:draw()
     common.draw_text(style.code_font, style.text, v, "left", ox + style.padding.x, oy + yoffset, 0, h)
   end
 end
-function WatchResultView:refresh(idx)
+function DebuggerWatchResultView:refresh(idx)
   if debugger.active_debugger then
+    local lines = debugger.watch_variable_view.doc.lines
+    local total_lines = lines[1]:find("%S") and #lines or 0
     if idx then
       self.results[idx] = ""
     else
-      self.results = { }
+      self.results[total_lines+1] = nil
     end
-    local lines = self.watch_variable_view.doc.lines
     for i = 1, #lines do
       if lines[i]:find("%S") and not idx or idx == i then
         debugger.print(lines[i], function(result)
@@ -198,12 +227,11 @@ function WatchResultView:refresh(idx)
 end
 
 
-local WatchVariableDoc = Doc:extend()
-function WatchVariableDoc:new(variable_view)
-  WatchVariableDoc.super.new(self)
-  self.variable_view = variable_view
+local DebuggerWatchVariableDoc = Doc:extend()
+function DebuggerWatchVariableDoc:new()
+  DebuggerWatchVariableDoc.super.new(self)
 end
-function WatchVariableDoc:text_input(text)
+function DebuggerWatchVariableDoc:text_input(text)
   if self:has_selection() then
     self:delete_to()
   end
@@ -212,7 +240,7 @@ function WatchVariableDoc:text_input(text)
     local line, col = self:get_selection()
     self:insert(line, col, text:sub(1, newline))
     self:move_to(newline-1)
-    self.variable_view.result_view:refresh(line)
+    debugger.watch_result_view:refresh(line)
     core.set_active_view(core.root_view)
   else
     local line, col = self:get_selection()
@@ -220,7 +248,7 @@ function WatchVariableDoc:text_input(text)
     self:move_to(#text)
   end
 end
-function WatchVariableDoc:set_selection(line1, col1, line2, col2, swap)
+function DebuggerWatchVariableDoc:set_selection(line1, col1, line2, col2, swap)
   assert(not line2 == not col2, "expected 2 or 4 arguments")
   if swap then line1, col1, line2, col2 = line2, col2, line1, col1 end
   line1, col1 = self:sanitize_position(line1, col1)
@@ -232,122 +260,122 @@ function WatchVariableDoc:set_selection(line1, col1, line2, col2, swap)
   self.selection.a.line, self.selection.a.col = line1, col1
   self.selection.b.line, self.selection.b.col = line2, col2
 end
-local WatchVariableView = DocView:extend()
-function WatchVariableView:new()
-  WatchVariableView.super.new(self, WatchVariableDoc(self))
-  self.visible = true
+local DebuggerWatchVariableView = DocView:extend()
+function DebuggerWatchVariableView:new()
+  DebuggerWatchVariableView.super.new(self, DebuggerWatchVariableDoc(self))
   self.target_size = 50
   self.init_size = true
-  self.result_view = nil
 end
-function WatchVariableView:set_target_size(axis, value)
+function DebuggerWatchVariableView:set_target_size(axis, value)
   if axis == "y" then
     self.target_size = value
     return true
   end
 end
-function WatchVariableView:try_close(do_close) end
-function WatchVariableView:get_scrollable_size() return 0 end
-function WatchVariableView:get_gutter_width() return 0 end
-function WatchVariableView:draw_line_gutter(idx, x, y) end
-function WatchVariableView:get_line_screen_position(idx)
+function DebuggerWatchVariableView:try_close(do_close) end
+function DebuggerWatchVariableView:get_scrollable_size() return 0 end
+function DebuggerWatchVariableView:get_gutter_width() return 0 end
+function DebuggerWatchVariableView:draw_line_gutter(idx, x, y) end
+function DebuggerWatchVariableView:get_line_screen_position(idx)
   local x, y = self:get_content_offset()
   return x + self:get_gutter_width(), y + (idx-1)
 end
-function WatchVariableView:draw_line_body(idx, x, y)
-  WatchVariableView.super.draw_line_body(self, idx, x + style.padding.x, y)
+function DebuggerWatchVariableView:draw_line_body(idx, x, y)
+  DebuggerWatchVariableView.super.draw_line_body(self, idx, x + style.padding.x, y)
   renderer.draw_rect(x - self:get_gutter_width(), y + self:get_line_height(), self.size.x, 1, style.divider)
 end
 
 
-local StackView = View:extend()
-
-function StackView:new()
-  StackView.super.new(self)
+local DebuggerStackView = View:extend()
+function DebuggerStackView:new()
+  DebuggerStackView.super.new(self)
   self.stack = { }
-  self.visible = true
   self.target_size = 50
   self.scrollable = true
   self.init_size = true
   self.hovered_frame = nil
+  self.active_frame = nil
 end
-
-function StackView:update()
-  local dest = self.visible and self.target_size or 0
+function DebuggerStackView:update()
+  local dest = debugger.drawer_visible and self.target_size or 0
   if self.init_size then
     self.size.y = dest
     self.init_size = false
   else
     self:move_towards(self.size, "y", dest)
   end
-  StackView.super.update(self)
+  DebuggerStackView.super.update(self)
 end
-
-function StackView:set_target_size(axis, value)
+function DebuggerStackView:set_target_size(axis, value)
   if axis == "y" then
     self.target_size = value
     return true
   end
 end
-
-function StackView:set_stack(stack)
+function DebuggerStackView:set_stack(stack)
   self.stack = stack
   self.hovered_frame = nil
+  self.active_frame = 1
   core.redraw = true
 end
-
-function StackView:get_item_height()
+function DebuggerStackView:get_item_height()
   return style.font:get_height() + style.padding.y*2
 end
-
-function StackView:get_scrollable_size()
+function DebuggerStackView:get_scrollable_size()
   return #self.stack and self:get_item_height() * #self.stack
 end
-
-function StackView:on_mouse_moved(px, py, ...)
-  StackView.super.on_mouse_moved(self, px, py, ...)
+function DebuggerStackView:on_mouse_moved(px, py, ...)
+  DebuggerStackView.super.on_mouse_moved(self, px, py, ...)
   if self.dragging_scrollbar then return end
   local ox, oy = self:get_content_offset()
   local offset = math.floor((py - oy) / self:get_item_height()) + 1
   self.hovered_frame = offset >= 1 and offset <= #self.stack and offset
 end
-
-function StackView:on_mouse_pressed(button, x, y, clicks)
-  local caught = StackView.super.on_mouse_pressed(self, button, x, y, clicks)
+function DebuggerStackView:on_mouse_pressed(button, x, y, clicks)
+  local caught = DebuggerStackView.super.on_mouse_pressed(self, button, x, y, clicks)
   if caught then
     return
   end
   if self.hovered_frame then
+    if clicks >= 2 then
+      debugger.frame(self.hovered_frame - 1)
+      self.active_frame = self.hovered_frame
+      debugger.set_execution_point(self.stack[self.hovered_frame][2], self.stack[self.hovered_frame][3])
+    end
     jump_to_file(self.stack[self.hovered_frame][2], self.stack[self.hovered_frame][3])
   end
 end
-
-function StackView:draw()
+function DebuggerStackView:draw()
   self:draw_background(style.background2)
   local h = style.font:get_height()
   local ox, oy = self:get_content_offset()
   for i,v in ipairs(self.stack) do
     local yoffset = style.padding.y + (i-1) * (style.font:get_height() + style.padding.y * 2)
-    if self.hovered_frame == i then
+    if self.hovered_frame == i or self.active_frame == i then
       renderer.draw_rect(ox, oy + yoffset - style.padding.y, self.size.x, h + style.padding.y*2, style.line_highlight)
     end
     common.draw_text(style.code_font, style.text, "#" .. i .. " " .. v[1] .. " " .. v[2] .. (v[3] and (" line " .. v[3]) or ""), "left", ox + style.padding.x, oy + yoffset, 0, h)
   end
   self:draw_scrollbar()
 end
+function DebuggerStackView:refresh(on_finish)
+  debugger.backtrace(function(stack)
+    self:set_stack(stack)
+    if on_finish then
+      on_finish(stack)
+    end
+  end)
+end
 
-
-local stack_view = StackView()
-local watch_variable_view = WatchVariableView()
-local watch_result_view = WatchResultView(watch_variable_view)
-watch_variable_view.result_view = watch_result_view
+debugger.stack_view = DebuggerStackView()
+debugger.watch_variable_view = DebuggerWatchVariableView()
+debugger.watch_result_view = DebuggerWatchResultView()
 local node = core.root_view:get_active_node()
-local stack_view_node = node:split("down", stack_view, { y = true }, true)
-local watch_variable_view_node = stack_view_node:split("right", watch_variable_view, { y = true }, true)
-local watch_result_view_node = watch_variable_view_node:split("right", watch_result_view, { y = true }, true)
+local stack_view_node = node:split("down", debugger.stack_view, { y = true }, true)
+local watch_variable_view_node = stack_view_node:split("right", debugger.watch_variable_view, { y = true }, true)
+local watch_result_view_node = watch_variable_view_node:split("right", debugger.watch_result_view, { y = true }, true)
 
-
--- GDB Specific Stuff
+------------------------------------- GDB
 local function gdb_parse_string(str) 
   local offset = 0
   while offset ~= nil do
@@ -444,18 +472,13 @@ function debugger.backends.gdb:cmd(command, on_finish)
   debugger.output("Running GDB command " .. command .. ".")
   table.insert(self.command_queue, { command, on_finish })
 end
-function debugger.backends.gdb:step_into()
-  self:cmd("step")
-end
-function debugger.backends.gdb:step_over()
-  self:cmd("next")
-end
-function debugger.backends.gdb:step_out()
-  self:cmd("finish")
-end
-function debugger.backends.gdb:continue()
-  self:cmd("cont")
-end
+function debugger.backends.gdb:step_into()  self:cmd("step") end
+function debugger.backends.gdb:step_over()  self:cmd("next") end
+function debugger.backends.gdb:step_out()   self:cmd("finish") end
+function debugger.backends.gdb:continue()   self:cmd("cont") end
+function debugger.backends.gdb:halt()       self.running_program:signal("SIGINT") end
+function debugger.backends.gdb:is_running() return self.running_program ~= nil end
+function debugger.backends.gdb:frame(idx)   self:cmd("f " .. idx) end
 function debugger.backends.gdb:print(expr, on_finish) 
   self:cmd("p " .. expr, function(t, category, result)
     if result and type(result) == "table" then
@@ -468,19 +491,29 @@ function debugger.backends.gdb:print(expr, on_finish)
     end
   end)
 end
-function debugger.backends.gdb:attach(pid)
-  
-end
-function debugger.backends.gdb:is_running()
-  return self.running_program ~= nil
+function debugger.backends.gdb:backtrace(on_finish)
+  self:cmd("backtrace", function(type, category, frames)
+    local stack = { }
+    for i,v in ipairs(frames) do
+      local s,e = string.find(v, " at ")
+      if s then
+        local _, _, n, details = string.find(v:sub(1, s-1), "#(%d+)%s+(.+)")
+        local _, _, file, line = string.find(v:sub(e+1), "([^:]+):(%d+)")
+        table.insert(stack, {  details, file, tonumber(line) })
+      else
+        local s,e = string.find(v, " in ")
+        local _, _, n, details = string.find(v:sub(1, s-1), "#(%d+)%s+(.+)")
+        local file = v:sub(e + 1)
+        table.insert(stack, {  details, file, nil })
+      end
+    end
+    on_finish(stack)
+  end)
 end
 function debugger.backends.gdb:terminate()
   self:cmd("quit")
-  stack_view.visible = false
+  debugger.toggle_drawer(false)
   debugger.set_execution_point(nil)
-end
-function debugger.backends.gdb:halt()
-  self.running_program:signal("SIGINT")
 end
 function debugger.backends.gdb:add_breakpoint(file, line)
   if self.running_program then
@@ -501,28 +534,22 @@ function debugger.backends.gdb:remove_breakpoint(file, line)
   end
 end
 
-config.debugger_step_refresh_watches = true
 
 function debugger.backends.gdb:run(program)
   debugger.output("Running GDB on " .. program .. ".")
-  stack_view.set_stack({ })
-  stack_view.visible = true
+  debugger.toggle_drawer(false)
+  debugger.set_state("init")
   core.add_thread(function()
     self.running_program = process.popen("gdb", "-q", "-nx", "--interpreter=mi", "--args", program)
-    local result = ""
-    local accumulator = {}
-    local running_program_state = "init"
-    local resume_on_pause = false
+    local result, accumulator, resume_on_command_completion = "", {}, false
     local waiting_on_result = function(type, category, attributes)
-      running_program_state = "stopped"
+      self:cmd("set filename-display absolute")
       self:cmd("start")
       for file, v in pairs(debugger.breakpoints) do
         for line, v in pairs(debugger.breakpoints[file]) do
           self:add_breakpoint(file, line)
         end
       end
-      self:cmd("set filename-display absolute")
-      self:cmd("cont")
     end
     while result ~= nil do
       result = self.running_program:read()
@@ -530,95 +557,73 @@ function debugger.backends.gdb:run(program)
         local offset = 1
         while offset < #result do
           local newline = result:find("\n", offset) or #result
-          local line = result:sub(offset, newline-1)
-          local type, category, attributes = gdb_parse_status_line(line)
+          local type, category, attributes = gdb_parse_status_line(result:sub(offset, newline-1))
           offset = newline + 1 
           if type == "*" then
-            running_program_state = category
-          end
-          if type == "^" then
+            if category == "stopped" then
+              if attributes["reason"] == "exited-normally" then
+                self:terminate()
+              elseif attributes["frame"] and attributes["bkptno"] == "1" then
+                resume_on_command_completion = true
+                debugger.set_state("stopped", false)
+              else
+                if not resume_on_command_completion then
+                  debugger.set_state("stopped")
+                  accumulator = {}
+                else
+                  debugger.state = "stopped"
+                end
+              end
+            elseif category == "running" then
+              debugger.set_state("running")
+            end
+          elseif type == "^" then
             if (category == "done" or category == "error") and waiting_on_result then
               waiting_on_result(type, category, category == "error" and attributes["msg"] or accumulator)
             end
             waiting_on_result = nil
             accumulator = {}
-          end
-          if type == "~" then
+          elseif type == "~" then
             table.insert(accumulator, category)
-          end
-          if type == "=" and waiting_on_result then
+          elseif type == "=" and waiting_on_result then
             waiting_on_result(type, category, attributes)
             waiting_on_result = nil
-          elseif type == "*" and category == "stopped" and attributes["frame"] and attributes["bkptno"] ~= "1" and not resume_on_pause then
-            debugger.set_execution_point(attributes["frame"]["fullname"], tonumber(attributes["frame"]["line"]))
-            if config.debugger_step_refresh_watches then
-              watch_result_view:refresh()
-            end
-            accumulator = {}
-            self:cmd("backtrace", function(type, category, frames)
-              local stack = { }
-              for i,v in ipairs(frames) do
-                local s,e = string.find(v, " at ")
-                if s then
-                  local _, _, n, details = string.find(v:sub(1, s-1), "#(%d+)%s+(.+)")
-                  local _, _, file, line = string.find(v:sub(e+1), "([^:]+):(%d+)")
-                  table.insert(stack, {  details, file, tonumber(line) })
-                else
-                  local s,e = string.find(v, " in ")
-                  local _, _, n, details = string.find(v:sub(1, s-1), "#(%d+)%s+(.+)")
-                  local file = v:sub(e + 1)
-                  table.insert(stack, {  details, file, nil })
-                end
-              end
-              stack_view:set_stack(stack)
-              stack_view.visible = true
-            end)
-          elseif type == "*" and category == "stopped" and attributes["reason"] == "exited-normally" then
-            self:cmd("quit")
-          elseif type == "*" and category == "running" then
-            debugger.set_execution_point(nil)
-            stack_view.set_stack({ })
-            stack_view.visible = false
           end
         end
       end
       if not waiting_on_result and #self.command_queue > 0 then
-        if running_program_state == "running" then
-          self.running_program:signal("SIGINT")
-          resume_on_pause = true
-          running_program_state = "interrupting"
-        elseif running_program_state == "stopped" then
+        if debugger.state == "running" then
+          self:halt()
+          resume_on_command_completion = true
+          debugger.set_state("indeterminate")
+        else
           if self.running_program:write(self.command_queue[1][1] .. "\n") then
             if self.command_queue[1][2] then
               waiting_on_result = self.command_queue[1][2]
             end
             table.remove(self.command_queue, 1)
-            if #self.command_queue == 0 and resume_on_pause then
-              self:cmd("cont")
-              resume_on_pause = false
-            end
           end
         end
       end
-      coroutine.yield(config.debugger_interval or 0.1)
+      if not waiting_on_result and debugger.state == "stopped" and #self.command_queue == 0 and resume_on_command_completion then
+        self:continue()
+        resume_on_command_completion = false
+      end
+      coroutine.yield(debugger.interval)
     end
     debugger.output("GDB finished running " .. program .. ".")
     self.running_program = nil
-    stack_view.visible = false
+    debugger.toggle_drawer(false)
   end)
-  return true
 end
 
 command.add(nil, {
-  ["debugger:step-over"] = function()
-    debugger.step_over()
-  end,
-  ["debugger:step-into"] = function()
-    debugger.step_into()
-  end,
-  ["debugger:step-out"] = function()
-    debugger.step_out()
-  end,
+  ["debugger:step-over"] = function() debugger.step_over() end,
+  ["debugger:step-into"] = function() debugger.step_into() end,
+  ["debugger:step-out"] = function() debugger.step_out() end,
+  ["debugger:break"] = function() debugger.halt() end,
+  ["debugger:quit"] = function()  debugger.terminate() end,
+  ["debugger:toggle-drawer"] = function() debugger.toggle_drawer() end,
   ["debugger:toggle-breakpoint"] = function()
     if core.active_view and core.active_view.doc then
       local line1, col1, line2, col2, swap = core.active_view.doc:get_selection(true)
@@ -637,20 +642,8 @@ command.add(nil, {
         debugger.run(text)
       end)
     end
-  end,
-  ["debugger:break"] = function()    
-    debugger.halt()
-  end,
-  ["debugger:quit"] = function()    
-    debugger.terminate()
-  end,
-  ["debugger:toggle-debugger-drawer"] = function()    
-    stack_view.visible = not stack_view.visible
-    watch_variable_view.visible = not watch_variable_view.visible
-    watch_result_view.visible = not watch_result_view.visible
   end
 })
-
 
 keymap.add { 
   ["f7"]                 = "debugger:step-over",
@@ -659,5 +652,8 @@ keymap.add {
   ["f8"]                 = "debugger:start-or-continue", 
   ["ctrl+f8"]            = "debugger:break", 
   ["shift+f8"]           = "debugger:quit",
-  ["f9"]                 = "debugger:toggle-breakpoint"
+  ["f9"]                 = "debugger:toggle-breakpoint",
+  ["f12"]                = "debugger:toggle-drawer"
 }
+
+return debugger
