@@ -273,7 +273,7 @@ function DebuggerWatchVariableDoc:text_input(text)
     self:move_to(#text)
   end
 end
-function Doc:delete_to(...)
+function DebuggerWatchVariableDoc:delete_to(...)
   local line, col = self:get_selection(true)
   if self:has_selection() then
     self:remove(self:get_selection())
