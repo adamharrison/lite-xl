@@ -3,6 +3,7 @@ require "core.regex"
 local common = require "core.common"
 local config = require "core.config"
 local style = require "core.style"
+local profiler = require "core.profiler"
 local command
 local keymap
 local RootView
@@ -182,6 +183,7 @@ local function project_scan_thread()
         end
         dir.files = t
         core.redraw = true
+        print("REDRAWD")
       end
       if dir.name == core.project_dir then
         core.project_files = dir.files
@@ -478,6 +480,7 @@ function core.init()
   core.clip_rect_stack = {{ 0,0,0,0 }}
   core.log_items = {}
   core.docs = {}
+  core.cursor = "arrow"
   core.window_mode = "normal"
   core.threads = setmetatable({}, { __mode = "k" })
   core.blink_start = system.get_time()
@@ -501,6 +504,7 @@ function core.init()
   end
 
   core.redraw = true
+  core.redraw_views = nil
   core.visited_files = {}
   core.restart_request = false
   core.replacements = whitespace_replacements()
@@ -911,8 +915,10 @@ function core.on_event(type, ...)
     core.root_view:on_mouse_wheel(...)
   elseif type == "resized" then
     core.window_mode = system.get_window_mode()
+    core.redraw = true
   elseif type == "minimized" or type == "maximized" or type == "restored" then
     core.window_mode = type == "restored" and "normal" or type
+    core.redraw = true
   elseif type == "filedropped" then
     local filename, mx, my = ...
     local info = system.get_file_info(filename)
@@ -945,6 +951,31 @@ function core.compose_window_title(title)
   return title == "" and "Lite XL" or title .. " - Lite XL"
 end
 
+-- Queues a redraw. Adds in an optional hash
+-- table that is merged into the existing redraw, if it exists.
+function core.queue_redraw(view, data)
+  if not core.redraw_views then
+    core.redraw_views = {}
+  end
+  if not core.redraw_views[view] then
+    core.redraw_views[view] = data or true
+  else
+    local t = core.redraw_views[view]
+    for k,v in pairs(data) do
+      if t[k] and type(v) == "table" then
+        for i,v2 in ipairs(v) do
+          table.insert(t[k], v2)
+        end
+      else
+        t[k] = v
+      end
+    end
+  end
+end
+
+function core.get_visible_docviews()
+  return { core.active_view }
+end
 
 function core.step()
   -- handle events
@@ -964,7 +995,6 @@ function core.step()
       local _, res = core.try(core.on_event, type, a, b, c, d)
       did_keymap = res or did_keymap
     end
-    core.redraw = true
   end
   if mouse_moved then
     core.try(core.on_event, "mousemoved", mouse.x, mouse.y, mouse.dx, mouse.dy)
@@ -975,30 +1005,40 @@ function core.step()
   -- update
   core.root_view.size.x, core.root_view.size.y = width, height
   core.root_view:update()
-  if not core.redraw then return false end
+  if not core.redraw and not core.redraw_views then return false end
+  print("DRAW", core.redraw)
+  local redraw = core.redraw
+  local redraw_views = core.redraw_views 
   core.redraw = false
+  core.redraw_views = nil
 
-  -- close unreferenced docs
-  for i = #core.docs, 1, -1 do
-    local doc = core.docs[i]
-    if #core.get_views_referencing_doc(doc) == 0 then
-      table.remove(core.docs, i)
-      core.log_quiet("Closed doc \"%s\"", doc:get_name())
+  if redraw then
+    -- close unreferenced docs
+    for i = #core.docs, 1, -1 do
+      local doc = core.docs[i]
+      if #core.get_views_referencing_doc(doc) == 0 then
+        table.remove(core.docs, i)
+        core.log_quiet("Closed doc \"%s\"", doc:get_name())
+      end
     end
-  end
-
-  -- update window title
-  local current_title = get_title_filename(core.active_view)
-  if current_title ~= core.window_title then
-    system.set_window_title(core.compose_window_title(current_title))
-    core.window_title = current_title
+  
+    -- update window title
+    local current_title = get_title_filename(core.active_view)
+    if current_title ~= core.window_title then
+      system.set_window_title(core.compose_window_title(current_title))
+      core.window_title = current_title
+    end
   end
 
   -- draw
   renderer.begin_frame()
   core.clip_rect_stack[1] = { 0, 0, width, height }
   renderer.set_clip_rect(table.unpack(core.clip_rect_stack[1]))
-  core.root_view:draw()
+  if not redraw and redraw_views then
+    for i,v in pairs(redraw_views) do i:draw(v) end
+  else
+    core.root_view:draw()
+  end
   renderer.end_frame()
   return true
 end
@@ -1039,6 +1079,9 @@ end)
 
 function core.run()
   local idle_iterations = 0
+  local start_time = system.get_time()
+  profiler.configuration({ fW = 80 })
+  profiler.start()
   while true do
     core.frame_start = system.get_time()
     local did_redraw = core.step()
@@ -1064,6 +1107,10 @@ function core.run()
       local elapsed = system.get_time() - core.frame_start
       system.sleep(math.max(0, 1 / config.fps - elapsed))
     end
+    if system.get_time() - start_time > 20 then
+      profiler.stop()
+      profiler.report("profiler.log")
+    end
   end
 end
 
@@ -1074,7 +1121,10 @@ end
 
 
 function core.request_cursor(value)
-  core.cursor_change_req = value
+  if value ~= core.cursor then
+    core.cursor_change_req = value
+    core.redraw = true
+  end
 end
 
 

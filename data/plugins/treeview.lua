@@ -177,6 +177,8 @@ function TreeView:on_mouse_moved(px, py, ...)
   local item_changed, tooltip_changed
   for item, x,y,w,h in self:each_item() do
     if px > x and py > y and px <= x + w and py <= y + h then
+      core.queue_redraw(self)
+      print("WAT")
       item_changed = true
       self.hovered_item = item
       

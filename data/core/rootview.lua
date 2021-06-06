@@ -181,6 +181,7 @@ end
 
 
 function Node:set_active_view(view)
+  core.redraw = true
   assert(self.type == "leaf", "Tried to set active view on non-leaf node")
   self.active_view = view
   core.set_active_view(view)
@@ -284,6 +285,7 @@ end
 
 function Node:tab_hovered_update(px, py)
   local tab_index = self:get_tab_overlapping_point(px, py)
+  if self.hovered_tab ~= tab_index then core.queue_redraw(self) end
   self.hovered_tab = tab_index
   self.hovered_close = 0
   self.hovered_scroll_button = 0
@@ -739,6 +741,7 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
     self.dragged_divider = div
     return
   end
+  core.redraw = true
   local node = self.root_node:get_child_overlapping_point(x, y)
   if node.hovered_scroll_button > 0 then
     node:scroll_tabs(node.hovered_scroll_button)
@@ -860,6 +863,7 @@ function RootView:draw()
   end
   if core.cursor_change_req then
     system.set_cursor(core.cursor_change_req)
+    core.cursor = core.cursor_change_req
     core.cursor_change_req = nil
   end
 end

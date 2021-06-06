@@ -308,7 +308,11 @@ function DocView:update()
     local T, t0 = config.blink_period, core.blink_start
     local ta, tb = core.blink_timer, system.get_time()
     if ((tb - t0) % T < T / 2) ~= ((ta - t0) % T < T / 2) then
-      core.redraw = true
+      local lines = {}
+      --for idx, line in self.doc:get_selections() do
+        table.insert(lines, line)
+      --end
+      core.queue_redraw(self, { ["lines"] = lines })
     end
     core.blink_timer = tb
   end
@@ -386,34 +390,70 @@ function DocView:draw_line_gutter(idx, x, y)
   renderer.draw_text(self:get_font(), idx, x, y + yoffset, color)
 end
 
-
-function DocView:draw()
-  self:draw_background(style.background)
-
-  local font = self:get_font()
-  font:set_tab_size(config.indent_size)
-
-  local minline, maxline = self:get_visible_line_range()
-  local lh = self:get_line_height()
-
-  local _, y = self:get_line_screen_position(minline)
-  local x = self.position.x
-  for i = minline, maxline do
-    self:draw_line_gutter(i, x, y)
-    y = y + lh
+local function iterate_block_func(container, idx)
+  local self, blocks, minline, maxline = unpack(container)
+  if not blocks then    
+    if idx == 2 then
+      return nil
+    end
+    return idx+1, minline, maxline
   end
+  if idx > #blocks then
+    return nil
+  end
+  local s, e = blocks[idx], blocks[idx]
+  idx = idx + 1
+  for i = idx, #blocks do
+    if blocks[i] - s ~= i - idx + 1 then
+      return i, s, e
+    else
+      e = blocks[i]
+    end
+  end
+  return #blocks + 1,s,e
+end
 
-  local x, y = self:get_line_screen_position(minline)
-  local gw = self:get_gutter_width()
-  local pos = self.position
-  core.push_clip_rect(pos.x + gw, pos.y, self.size.x, self.size.y)
-  for i = minline, maxline do
-    self:draw_line_body(i, x, y)
-    y = y + lh
+-- Goes through, and returns the list of blocks to be redrawn in chunks.
+-- If blocks is nil, returns automatically the visible list of lines.
+function DocView:iterate_blocks(blocks)
+  return iterate_block_func, { self, blocks, self:get_visible_line_range() }, 1
+end
+
+function DocView:draw(cache)
+  local x,y,w = self.position.x, self.position.y, self.size.x
+  local lh = self:get_line_height()
+  
+  if cache and cache.lines then
+    for i, s, e in self:iterate_blocks(cache.lines) do
+      local _, y, h = self:get_line_screen_position(s)
+      renderer.draw_rect(x, y, w + x % 1, lh * (e - s + 1) + y % 1, style.background)
+    end
+  else
+    self:draw_background(style.background)
+  end
+  self:get_font():set_tab_size(config.indent_size)
+
+  for i, s, e in self:iterate_blocks(cache and cache.lines) do
+    local _, y = self:get_line_screen_position(s)
+    for i = s, e do
+      self:draw_line_gutter(i, x, y)
+      y = y + lh
+    end
+  end
+  
+  core.push_clip_rect(x + self:get_gutter_width(), y, w, self.size.y)
+  for i, s, e in self:iterate_blocks(cache and cache.lines) do
+    local x, y = self:get_line_screen_position(s)
+    for i = s, e do
+      self:draw_line_body(i, x, y)
+      y = y + lh
+    end
   end
   core.pop_clip_rect()
 
-  self:draw_scrollbar()
+  if not cache then
+    self:draw_scrollbar()
+  end
 end
 
 

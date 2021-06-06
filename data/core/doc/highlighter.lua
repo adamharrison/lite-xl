@@ -1,6 +1,7 @@
 local core = require "core"
 local config = require "core.config"
 local tokenizer = require "core.tokenizer"
+local common = require "core.common"
 local Object = require "core.object"
 
 
@@ -19,18 +20,31 @@ function Highlighter:new(doc)
         coroutine.yield(1 / config.fps)
 
       else
+        print("ABS", self.doc.abs_filename)
         local max = math.min(self.first_invalid_line + 40, self.max_wanted_line)
 
+        local lines = {}
         for i = self.first_invalid_line, max do
           local state = (i > 1) and self.lines[i - 1].state
           local line = self.lines[i]
           if not (line and line.init_state == state) then
             self.lines[i] = self:tokenize_line(i, state)
+            table.insert(lines, i)
+          end
+          if not line or line.state ~= self.lines[i].state then
+            self.max_wanted_line = math.min(i + 1, #self.doc.lines)
+            max = math.min(self.first_invalid_line + 40, self.max_wanted_line)
           end
         end
 
         self.first_invalid_line = max + 1
-        core.redraw = true
+        -- core.redraw = true
+        for i,v in ipairs(core.get_visible_docviews()) do
+          if v.doc == self.doc then
+            print("LINES", unpack(lines))
+            core.queue_redraw(v, { ["lines"] = lines })
+          end
+        end
         coroutine.yield()
       end
     end
@@ -64,8 +78,12 @@ function Highlighter:get_line(idx)
   local line = self.lines[idx]
   if not line or line.text ~= self.doc.lines[idx] then
     local prev = self.lines[idx - 1]
-    line = self:tokenize_line(idx, prev and prev.state)
-    self.lines[idx] = line
+    local newline = self:tokenize_line(idx, prev and prev.state)
+    self.lines[idx] = newline
+    if not line or newline.state ~= line.state then
+      self.max_wanted_line = common.clamp(idx + 40, self.max_wanted_line, #self.doc.lines)
+    end
+    line = newline
   end
   self.max_wanted_line = math.max(self.max_wanted_line, idx)
   return line
