@@ -4,7 +4,6 @@ local command = require "core.command"
 local keymap = require "core.keymap"
 local config = require "core.config"
 local common = require "core.common"
-local process = require "core.process"
 local style = require "core.style"
 local View = require "core.view"
 local DocView = require "core.docview"
@@ -42,10 +41,11 @@ end
 
 local function run_command(cmd, on_line, on_done)
   core.add_thread(function()
-    build.running_program = process.popen(unpack(cmd))
+    build.running_program = process.start(cmd)
     local result = ""
-    while result ~= nil do
-      result = build.running_program:read()
+    while build.running_program:running() do
+      result = build.running_program:read_stdout() or build.running_program:read_stderr()
+      print("RESULT " .. result)
       if result ~= nil then
         local offset = 1
         while offset < #result do
@@ -77,7 +77,8 @@ function build.build(target)
   build.message_view:clear_messages()
   build.message_view.visible = true
   local target = build.current_target
-  run_command({ "make", build.targets[target].name, "-j", build.threads, "--quiet" }, function(line)
+  local command = build.targets[target].cmd or "make"
+  run_command({ command, build.targets[target].name, "-j", build.threads, "--quiet" }, function(line)
     local _, _, file, line_number, column, type, message = line:find(build.error_pattern)
     if file and (type == "warning" or type == "error") then
       build.message_view:add_message({ type, file, line_number, column, message })
@@ -107,11 +108,11 @@ end
 
 local doc_view_draw_line_gutter = DocView.draw_line_gutter
 function DocView:draw_line_gutter(idx, x, y)
-  if self.doc.abs_filename == build.message_view.active_file 
+  if self.doc.abs_filename == build.message_view.active_file
     and build.message_view.active_message
     and idx == build.message_view.active_line
   then
-    renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.error_line)  
+    renderer.draw_rect(x, y, self:get_gutter_width(), self:get_line_height(), style.error_line)
   end
   doc_view_draw_line_gutter(self, idx, x, y)
 end
@@ -200,30 +201,30 @@ local message_view_node = node:split("down", build.message_view, { y = true }, t
 
 command.add(nil, {
   ["build:build"] = function()
-    if #build.targets > 0 then 
+    if #build.targets > 0 then
       build.build(build.targets[build.current_target].name)
     end
   end,
-  ["build:clean"] = function() 
+  ["build:clean"] = function()
     build.clean()
   end,
-  ["build:next-target"] = function() 
+  ["build:next-target"] = function()
     if #build.targets > 0 then
       build.current_target = (build.current_target + 1) % #build.targets
     end
   end,
-  ["build:next-target"] = function() 
+  ["build:next-target"] = function()
     if #build.targets > 0 then
       build.current_target = (build.current_target + 1) % #build.targets
       config.target_binary = build.targets[build.current_target].binary
     end
   end,
-  ["build:toggle-drawer"] = function() 
+  ["build:toggle-drawer"] = function()
     build.message_view.visible = not build.message_view.visible
   end
 })
 
-keymap.add { 
+keymap.add {
   ["ctrl+b"]             = "build:build",
   ["ctrl+t"]             = "build:next-target",
   ["ctrl+shift+b"]       = "build:clean",
