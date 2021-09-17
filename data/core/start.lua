@@ -1,5 +1,5 @@
 -- this file is used by lite-xl to setup the Lua environment when starting
-VERSION = "@PROJECT_VERSION@"
+VERSION = "simplified"
 MOD_VERSION = "2"
 
 SCALE = tonumber(os.getenv("LITE_SCALE")) or SCALE
@@ -31,3 +31,4 @@ end }
 
 table.pack = table.pack or pack or function(...) return {...} end
 table.unpack = table.unpack or unpack
+
