@@ -27,7 +27,7 @@ if [[ $OSTYPE == 'darwin'* ]]; then
 fi
 
 if [ ! -f liblite.a ]; then
-	echo "Building liblite.a... (only needs to be done once)"
+	echo "Building liblite.a... (can take some time, but only needs to be done once)"
 	$CC -c -O3 $LLFLAGS $LLSRCS
 	$AR -r -s liblite.a *.o
 	rm *.o
@@ -48,7 +48,7 @@ IF NOT DEFINED CC SET CC=gcc
 IF NOT DEFINED AR SET AR=ar
 IF EXIST liblite.lib GOTO :LITE
 
-ECHO Building liblite.lib... (only needs to be done once)
+ECHO Building liblite.lib... (can take some time, but only needs to be done once)
 CALL %CC% -c %LLFLAGS% %LLSRCS%
 CALL %AR% -r -s liblite.lib *.o
 DEL *.o
