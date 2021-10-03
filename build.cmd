@@ -47,7 +47,7 @@ fi
 :;if [ ! -f $LNAME ]; then
 :LIBLITE
 	ECHO Building %LNAME%. Can take a moment, but only needs to be done once.
-	CALL %CC% -c %LLFLAGS% %LLSRCS%
+  CALL %CC% -c %LLFLAGS% %LLSRCS%
   CALL %AR% -r -s %LNAME% *.o
 	DEL *.o
 :;fi
