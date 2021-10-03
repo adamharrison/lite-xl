@@ -7,7 +7,7 @@ massively simplifying the build system.
 
 ## Supporting Libraries
 
-Supporting libraries are now git submodules. These must be pulled in with: 
+The 4 supporting libraries of lite are now git submodules. These must be pulled in with: 
 `git submodule update --remote --init` after cloning the repository.
 
 SDL2 should be installed as normal on Mac and Linux, or under msys. (You can use your
