@@ -49,7 +49,7 @@ IF NOT DEFINED AR SET AR=ar
 IF EXIST liblite.lib GOTO :LITE
 
 ECHO Building liblite.lib... (only needs to be done once)
-CALL %CC% -c %LLAGS% %LLSRCS%
+CALL %CC% -c %LLFLAGS% %LLSRCS%
 CALL %AR% -r -s liblite.lib *.o
 DEL *.o
 
