@@ -18,9 +18,9 @@ COPY libs\\pcre2\\src\\config.h.generic libs\\pcre2\\src\\config.h
 COPY libs\\pcre2\\src\\pcre2.h.generic libs\\pcre2\\src\\pcre2.h
 COPY libs\\pcre2\\src\\pcre2_chartables.c.dist libs\\pcre2\\src\\pcre2_chartables.c
 
-:; if [ -z "PLATFORM=WINDOWS" ]; then
+:; if [ -z "WINDOWS_CMD_LINE_NOT_MSYS" ]; then
   SET FLAGS=%FLAGS% -lSDL2main -lSDL2 -mwindows -Dmain=SDL_main -Ilibs/SDL/include
-  SET LNAME="liblite.lib"
+  SET LNAME=liblite.lib
   IF NOT DEFINED BIN SET BIN=lite-xl.exe
   IF NOT DEFINED CC SET CC=gcc
   IF NOT DEFINED AR SET AR=ar
@@ -30,12 +30,17 @@ else
   : ${CC=gcc}
   : ${AR=ar}
   : ${SDL_CONFIG=sdl2-config}
-  : ${LNAME=liblite.a}
-  : ${BIN=lite-xl}
   FLAGS="$FLAGS `$SDL_CONFIG --cflags` `$SDL_CONFIG --libs`"
   if [[ $OSTYPE == 'darwin'* ]]; then
     FLAGS=$FLAGS -DLITE_USE_SDL_RENDERER -Framework CoreServices -Framework Foundation
     SRCS=$SRCS src/*.m
+  fi
+  if [[ $OSTYPE == 'msys' ]]; then
+    : ${BIN=lite-xl.exe}
+    : ${LNAME=liblite.lib}
+  else
+    : ${BIN=lite-xl}
+    : ${LNAME=liblite.a}
   fi
 fi
 
