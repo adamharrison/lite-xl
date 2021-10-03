@@ -42,7 +42,7 @@ COPY libs\pcre2\src\config.h.generic libs\pcre2\src\config.h > nul
 COPY libs\pcre2\src\pcre2.h.generic libs\pcre2\src\pcre2.h > nul
 COPY libs\pcre2\src\pcre2_chartables.c.dist libs\pcre2\src\pcre2_chartables.c > nul
 
-SET FLAGS=%FLAGS% -lmingw32 -lSDL2main -lSDL2 -mwindows -Dmain=SDL_main -Ilibs/SDL/include
+SET FLAGS=%FLAGS% -lSDL2main -lSDL2 -mwindows -Dmain=SDL_main -Ilibs/SDL/include
 
 IF NOT DEFINED CC SET CC=gcc
 IF NOT DEFINED AR SET AR=ar
