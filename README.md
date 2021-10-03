@@ -1,13 +1,11 @@
 # Lite XL - Simplified
 
-A lightweight text editor written in Lua, adapted from [lite-xl].
-
-Intended to be nearly-fully compatible with Lite XL, from the perspective of Lua, while
-massively simplifying the build system.
+A lightweight text editor written in Lua, adapted from [lite-xl]. Makes it easier to build
+on different platforms if you're having trouble with meson.
 
 ## Supporting Libraries
 
-The 4 supporting libraries of lite are now git submodules. These must be pulled in with: 
+The 4 supporting libraries of lite are now git submodules. These **must** be pulled in with: 
 `git submodule update --remote --init` after cloning the repository.
 
 SDL2 should be installed as normal on Mac and Linux, or under msys. (You can use your
@@ -20,8 +18,8 @@ package manager).
 these [here](https://www.libsdl.org/release/SDL2-devel-2.0.16-VC.zip). They're located under
 lib/x64.
 
-**To build**, simply run `build.cmd`; this should function on Mac, Windows and Linux.
-**If you're running in `msys`**; you will have to type `bash build.cmd` to properly
+**To build**, simply run `build.cmd`; this should function on Mac, Linux and Windows command line.
+**If you're running on windows in `msys`**; you will have to type `bash build.cmd` to properly
 initiate the build.
 
 ## Licenses
