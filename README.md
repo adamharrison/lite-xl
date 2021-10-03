@@ -1,9 +1,7 @@
 # Lite XL - Simplified
 
-A lightweight text editor written in Lua, adapted from [lite-xl].
-
-Intended to be nearly-fully compatible with Lite XL, from the perspective of Lua, while
-massively simplifying the build system.
+A lightweight text editor written in Lua, adapted from [lite-xl]. Makes it easier to build
+on different platforms if you're having trouble with meson.
 
 ## Supporting Libraries
 
