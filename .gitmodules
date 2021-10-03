@@ -1,0 +1,14 @@
+[submodule "libs/freetype"]
+	path = libs/freetype
+	url = https://gitlab.freedesktop.org/freetype/freetype.git
+[submodule "libs/lua"]
+	path = libs/lua
+	url = https://github.com/lua/lua.git
+	branch = "v5-2"
+[submodule "libs/pcre2"]
+	path = libs/pcre2
+	url = https://github.com/PhilipHazel/pcre2.git
+[submodule "libs/SDL"]
+	path = libs/SDL
+	url = https://github.com/libsdl-org/SDL.git
+	branch = "main"
