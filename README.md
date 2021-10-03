@@ -15,7 +15,7 @@ should they be necessary, freetype2, lua5.2, SDL2, and pcre2. These can be pulle
 these [here](https://www.libsdl.org/release/SDL2-devel-2.0.16-VC.zip). They're located under
 lib/x64.
 
-**To build a copy**, simply run `./build.cmd`; this should function on Mac, Windows and Linux.
+**To build a copy**, simply run `build.cmd`; this should function on Mac, Windows and Linux.
 If you're running in `msys`; you will have to type `bash build.cmd`.
 
 ## Licenses
