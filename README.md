@@ -3,8 +3,7 @@
 A lightweight text editor written in Lua, adapted from [lite-xl].
 
 Intended to be nearly-fully compatible with Lite XL, from the perspective of Lua, while
-massively slimming down the Lite XL core, rendering and build systems, without
-sacrificing quality or performance.
+massively simplifying the build system.
 
 I've also used standard git submodules to pull in the only 4 supporting libraries,
 should they be necessary, freetype2, lua5.2, SDL2, and pcre2. These can be pulled in with
