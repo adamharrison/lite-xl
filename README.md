@@ -12,7 +12,7 @@ should they be necessary, freetype2, lua5.2, SDL2, and pcre2. These can be pulle
 
 **On Windows, if building using cmd.exe**, you should place `SDLmain.lib`, `SDL.lib`,
 `SDL.dll` into the main folder project directory, before running a build. You can retrieve
-these [here][https://www.libsdl.org/release/SDL2-devel-2.0.16-VC.zip]. They're located under
+these [here](https://www.libsdl.org/release/SDL2-devel-2.0.16-VC.zip). They're located under
 lib/x64.
 
 **To build a copy**, simply run `./build.cmd`; this should function on Mac, Windows and Linux.
