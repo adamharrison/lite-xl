@@ -22,6 +22,17 @@ lib/x64.
 **If you're running on windows in `msys`**; you will have to type `bash build.cmd` to properly
 initiate the build.
 
+## Cross Compiling
+
+From Linux, to compile a windows executable, all you need to do is:
+
+`CC=i686-w64-mingw32-gcc AR=i686-w64-mingw32-gcc-ar SDL_CONFIG=/usr/local/cross-tools/i686-w64-mingw32/bin/sdl2-config ./build.cmd`
+
+As long as you've compiled SDL with your mingw compiler. You can compile SDL by going to the
+lib folder, and running:
+
+`CC=i686-w64-mingw32-gcc ./configure --host=i686-w64-mingw32 && make && sudo make install`
+
 ## Licenses
 
 This project is free software; you can redistribute it and/or modify it under

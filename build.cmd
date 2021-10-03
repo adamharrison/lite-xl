@@ -14,8 +14,9 @@ fi
 
 : ${CC=gcc}
 : ${AR=ar}
+: ${SDL_CONFIG=sdl2-config}
 
-FLAGS="$FLAGS `sdl2-config --cflags` `sdl2-config --libs`"
+FLAGS="$FLAGS `$SDL_CONFIG --cflags` `$SDL_CONFIG --libs`"
 
 cp -f libs/pcre2/src/config.h.generic libs/pcre2/src/config.h
 cp -f libs/pcre2/src/pcre2.h.generic libs/pcre2/src/pcre2.h
