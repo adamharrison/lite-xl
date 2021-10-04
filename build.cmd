@@ -14,17 +14,17 @@ SET LLFLAGS=-Ilibs/pcre2/src -DFT2_BUILD_LIBRARY -Ilibs/freetype/include -DHAVE_
 SET FLAGS=-Ilibs/freetype/include -Ilibs/lua -Ilibs/pcre2/src -Isrc -O3 -fno-strict-aliasing -DPCRE2_STATIC -L. -lm  -llite -static-libgcc
 SET SRCS=src/*.c src/api/*.c
 
-COPY libs\\pcre2\\src\\config.h.generic libs\\pcre2\\src\\config.h
-COPY libs\\pcre2\\src\\pcre2.h.generic libs\\pcre2\\src\\pcre2.h
-COPY libs\\pcre2\\src\\pcre2_chartables.c.dist libs\\pcre2\\src\\pcre2_chartables.c
+COPY libs\\pcre2\\src\\config.h.generic libs\\pcre2\\src\\config.h > nul
+COPY libs\\pcre2\\src\\pcre2.h.generic libs\\pcre2\\src\\pcre2.h > nul
+COPY libs\\pcre2\\src\\pcre2_chartables.c.dist libs\\pcre2\\src\\pcre2_chartables.c > nul
 
-:; if [ -z "WINDOWS_CMD_LINE_NOT_MSYS" ]; then
-  SET FLAGS=%FLAGS% -lSDL2main -lSDL2 -mwindows -Dmain=SDL_main -Ilibs/SDL/include
-  SET LNAME=liblite.lib
+:; if [ $OSTYPE == 'windows' ]; then
+  IF NOT DEFINED LNAME SET LNAME=liblite.lib
   IF NOT DEFINED BIN SET BIN=lite-xl.exe
   IF NOT DEFINED CC SET CC=gcc
   IF NOT DEFINED AR SET AR=ar
-  IF EXIST liblite.lib GOTO :LITE
+  SET FLAGS=%FLAGS% -lSDL2main -lSDL2 -mwindows -Dmain=SDL_main -Ilibs/SDL/include
+  IF EXIST %LNAME% GOTO :LITE
   GOTO :LIBLITE
 else
   : ${CC=gcc}
@@ -44,12 +44,11 @@ else
   fi
 fi
 
-:;if [ ! -f $LNAME ]; then
-:LIBLITE
-	ECHO Building %LNAME%. Can take a moment, but only needs to be done once.
+:LIBLITE :;if [ ! -f $LNAME ]; then
+  ECHO Building %LNAME%. Can take a moment, but only needs to be done once.
   CALL %CC% -c %LLFLAGS% %LLSRCS%
   CALL %AR% -r -s %LNAME% *.o
-	DEL *.o
+  DEL *.o
 :;fi
 
 :LITE
