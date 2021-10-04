@@ -18,9 +18,8 @@ package manager).
 these [here](https://www.libsdl.org/release/SDL2-devel-2.0.16-VC.zip). They're located under
 lib/x64.
 
-**To build**, simply run `build.cmd`; this should function on Mac, Linux and Windows command line.
-**If you're running on windows in `msys`**; you will have to type `bash build.cmd` to properly
-initiate the build.
+**To build**, simply run `build.sh`; this should function on Mac, Linux and MSYS command line.
+**If you're running on windows on the command line; you should use `build.cmd`.
 
 ## Cross Compiling
 
