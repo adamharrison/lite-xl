@@ -14,9 +14,9 @@ SET LLFLAGS=-Ilibs/pcre2/src -DFT2_BUILD_LIBRARY -Ilibs/freetype/include -DHAVE_
 SET FLAGS=-Ilibs/freetype/include -Ilibs/lua -Ilibs/pcre2/src -Isrc -O3 -fno-strict-aliasing -DPCRE2_STATIC -L. -lm  -llite -static-libgcc
 SET SRCS=src/*.c src/api/*.c
 
-COPY libs\\pcre2\\src\\config.h.generic libs\\pcre2\\src\\config.h > nul
-COPY libs\\pcre2\\src\\pcre2.h.generic libs\\pcre2\\src\\pcre2.h > nul
-COPY libs\\pcre2\\src\\pcre2_chartables.c.dist libs\\pcre2\\src\\pcre2_chartables.c > nul
+COPY libs\\pcre2\\src\\config.h.generic libs\\pcre2\\src\\config.h
+COPY libs\\pcre2\\src\\pcre2.h.generic libs\\pcre2\\src\\pcre2.h
+COPY libs\\pcre2\\src\\pcre2_chartables.c.dist libs\\pcre2\\src\\pcre2_chartables.c
 
 :; if [ $OSTYPE == 'windows' ]; then
   IF NOT DEFINED LNAME SET LNAME=liblite.lib
