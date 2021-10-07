@@ -214,6 +214,22 @@ float ren_font_get_width(RenFont *font, const char *text) {
   return width / surface_scale;
 }
 
+int ren_font_get_offset_for_width(RenFont* font, const char* text, int offset, float width) {
+  const char* end = text + strlen(text), *current = text + offset;
+  width /= renwin_surface_scale(&window_renderer);
+  float final_width = 0.0f;
+  while (text < end) {
+    unsigned int codepoint;
+    const char* new_current = utf8_to_codepoint(new_current, &codepoint);
+    GlyphMetric* metric = &font_get_glyphset(font, codepoint, 0)->metrics[codepoint % 256];
+    final_width += metric->xadvance ? metric->xadvance : font->space_advance;
+    if (final_width > width)
+      break;
+    current = new_current;
+  }
+  return current - text;
+}
+
 float ren_font_get_size(RenFont *font) {
   return font->size;
 }

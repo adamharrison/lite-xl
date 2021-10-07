@@ -49,7 +49,6 @@ static int bit32_replace(lua_State* L) {
   lua_pushnumber(L, (bits & ~mask) | ((number << offset) & mask));
   return 1;
 }
-
 #endif
 
 void api_load_libs(lua_State *L) {

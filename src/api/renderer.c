@@ -85,6 +85,13 @@ static int f_font_get_width(lua_State *L) {
   return 1;
 }
 
+static int f_font_get_offset(lua_State *L) {
+  RenFont** self = luaL_checkudata(L, 1, API_TYPE_FONT);
+  lua_pushnumber(L, ren_font_get_offset_for_width(*self, luaL_checkstring(L, 2), 
+    luaL_checknumber(L, 3), luaL_checknumber(L, 4)));
+  return 1;
+}
+
 static int f_font_get_height(lua_State *L) {
   RenFont** self = luaL_checkudata(L, 1, API_TYPE_FONT);
   lua_pushnumber(L, ren_font_get_height(*self));
@@ -193,6 +200,7 @@ static const luaL_Reg fontLib[] = {
   { "copy",               f_font_copy               },
   { "set_tab_size",       f_font_set_tab_size       },
   { "get_width",          f_font_get_width          },
+  { "get_offset",         f_font_get_offset         },
   { "get_height",         f_font_get_height         },
   { "get_size",           f_font_get_size           },
   { NULL, NULL }

@@ -48,6 +48,24 @@ DocView.translate = {
   end,
 }
 
+local compute_line_breaks(line)
+  local offset = 0, breaks = {}
+  loop
+    offset = renderer.get_offset(line, offset + 1, self.x)
+    table.insert(breaks, offset)
+  until offset >= #line
+  return breaks
+end
+
+function DocView:compute_line_breaks(idx)
+  if not idx then
+    for i,v in ipairs(self.lines) do
+      self.line_breaks[i] = compute_line_breaks(v)
+    end
+  else
+    self.line_breaks[idx] = compute_line_breaks(self.lines[idx])
+  end
+end
 
 function DocView:new(doc)
   DocView.super.new(self)
@@ -56,6 +74,8 @@ function DocView:new(doc)
   self.doc = assert(doc)
   self.font = "code_font"
   self.last_x_offset = {}
+  self.line_breaks = {}
+  self:compute_line_breaks()
 end
 
 

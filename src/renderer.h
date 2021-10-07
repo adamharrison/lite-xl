@@ -20,6 +20,7 @@ float ren_font_get_width(RenFont *font, const char *text);
 int ren_font_get_height(RenFont *font);
 float ren_font_get_size(RenFont *font);
 float ren_draw_text(RenFont *font, const char *text, float x, int y, RenColor color);
+int ren_font_get_offset_for_width(RenFont* font, const char* text, int offset, float width);
 
 void ren_draw_rect(RenRect rect, RenColor color);
 
