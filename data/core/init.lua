@@ -124,7 +124,7 @@ end
 -- Returns a list of file "items". In eash item the "filename" will be the
 -- complete file path relative to "root" *without* the trailing '/'.
 local function get_directory_files(dir, root, path, t, entries_count, recurse_pred, begin_hook)
-  if begin_hook then begin_hook() end
+  if begin_hook then begin_hook(t) end
   local t0 = system.get_time()
   local all = system.list_dir(root .. path) or {}
   local t_elapsed = system.get_time() - t0
@@ -162,14 +162,6 @@ end
 
 function core.project_subdir_set_show(dir, filename, show)
   dir.shown_subdir[filename] = show
-  if dir.files_limit and PLATFORM == "Linux" then
-    local fullpath = dir.name .. PATHSEP .. filename
-    local watch_fn = show and system.watch_dir_add or system.watch_dir_rm
-    local success = watch_fn(dir.watch_id, fullpath)
-    if not success then
-      core.log("Internal warning: error calling system.watch_dir_%s", show and "add" or "rm")
-    end
-  end
 end
 
 
@@ -301,26 +293,17 @@ end
 -- Populate a project folder top directory by scanning the filesystem.
 local function scan_project_folder(index)
   local dir = core.project_directories[index]
-  if PLATFORM == "Linux" then
-    local fstype = system.get_fs_type(dir.name)
-    dir.force_rescan = (fstype == "nfs" or fstype == "fuse")
-  end
-  local t, complete, entries_count = get_directory_files(dir, dir.name, "", {}, 0, timed_max_files_pred)
+  local fstype = PLATFORM == "Linux" and system.get_fs_type(dir.name)
+  dir.force_rescan = (fstype == "nfs" or fstype == "fuse")
+  dir.monitor = dirmonitor.new()
+  local t, complete, entries_count = get_directory_files(dir, dir.name, "", {}, 0, timed_max_files_pred, not dir.force_rescan and function(path) 
+    dir.monitor.watch(path)
+  end)
   if not complete then
     dir.slow_filesystem = not complete and (entries_count <= config.max_project_files)
     dir.files_limit = true
-    if not dir.force_rescan then
-      -- Watch non-recursively on Linux only.
-      -- The reason is recursively watching with dmon on linux
-      -- doesn't work on very large directories.
-      dir.watch_id = system.watch_dir(dir.name, PLATFORM ~= "Linux")
-    end
-    if core.status_view then -- May be not yet initialized.
+    if core.status_view then
       show_max_files_warning(dir)
-    end
-  else
-    if not dir.force_rescan then
-      dir.watch_id = system.watch_dir(dir.name, true)
     end
   end
   dir.files = t
@@ -1154,27 +1137,6 @@ function core.dir_rescan_add_job(dir, filepath)
   end)
 end
 
-
--- no-op but can be overrided by plugins
-function core.on_dirmonitor_modify(dir, filepath)
-end
-
-
-function core.on_dir_change(watch_id, action, filepath)
-  local dir = project_dir_by_watch_id(watch_id)
-  if not dir then return end
-  core.dir_rescan_add_job(dir, filepath)
-  if action == "delete" then
-    project_scan_remove_file(dir, filepath)
-  elseif action == "create" then
-    project_scan_add_file(dir, filepath)
-    core.on_dirmonitor_modify(dir, filepath);
-  elseif action == "modify" then
-    core.on_dirmonitor_modify(dir, filepath);
-  end
-end
-
-
 function core.on_event(type, ...)
   local did_keymap = false
   if type == "textinput" then
@@ -1214,8 +1176,6 @@ function core.on_event(type, ...)
     end
   elseif type == "focuslost" then
     core.root_view:on_focus_lost(...)
-  elseif type == "dirchange" then
-    core.on_dir_change(...)
   elseif type == "quit" then
     core.quit()
   end

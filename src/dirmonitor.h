@@ -1,15 +1,9 @@
 #ifndef DIRMONITOR_H
 #define DIRMONITOR_H
 
-#include <stdint.h>
-
-#include "dmon.h"
-#include "dmon_extra.h"
-
-void dirmonitor_init();
-void dirmonitor_deinit();
-void dirmonitor_watch_callback(dmon_watch_id watch_id, dmon_action action, const char *rootdir,
-  const char *filepath, const char *oldfilepath, void *user);
+struct dirmonitor* init_dirmonitor();
+void deinit_dirmonitor(struct dirmonitor* monitor);
+int check_dirmonitor(struct dirmonitor* monitor, int (*change_callback)(int, void*), void* data);
+int add_dirmonitor(struct dirmonitor* monitor, const char* path);
 
 #endif
-
