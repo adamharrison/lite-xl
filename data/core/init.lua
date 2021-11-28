@@ -3,6 +3,7 @@ require "core.regex"
 local common = require "core.common"
 local config = require "core.config"
 local style = require "core.style"
+local project = require "core.project"
 local command
 local keymap
 local RootView
@@ -52,59 +53,47 @@ local function update_recents_project(action, dir_path_abs)
 end
 
 
-function core.set_project_dir(new_dir, change_project_fn)
-  local chdir_ok = pcall(system.chdir, new_dir)
-  if chdir_ok then
-    if change_project_fn then change_project_fn() end
-    core.project_dir = common.normalize_volume(new_dir)
-    core.project_directories = {}
-    core.add_project_directory(new_dir)
-    return true
+function core.load_project_module()
+  local filename = ".lite_project.lua"
+  if system.get_file_info(filename) then
+    return core.try(function()
+      local fn, err = loadfile(filename)
+      if not fn then error("Error when loading project module:\n\t" .. err) end
+      fn()
+      core.log_quiet("Loaded project module")
+    end)
   end
-  return false
+  return true
 end
 
+function core.scan_project(project)
+  
+end
 
-function core.open_folder_project(dir_path_abs)
-  if core.set_project_dir(dir_path_abs, core.on_quit_project) then
+function core.set_project(project_or_dir, change_project_fn)
+  local project = project_or_dir ~= nil and typeof(project) == "string" and project.new(project_or_dir) or project_or_dir
+  local chdir_ok = pcall(system.chdir, project.dir)
+  if project == nil chdir_ok then
+    if change_project_fn then change_project_fn(project, core.project) end
+    core.project = project
     core.root_view:close_all_docviews()
-    update_recents_project("add", dir_path_abs)
-    if not core.load_project_module() then
-      command.perform("core:open-log")
+    if project then
+      update_recents_project("add", project.dir)
+      if not core.load_project_module() then
+        command.perform("core:open-log")
+      end
     end
-    core.on_enter_project(dir_path_abs)
+    core.scan_project(project)
+    return project
   end
+  return nil
 end
 
-
-local function strip_leading_path(filename)
-    return filename:sub(2)
+function core.add_project_directory(path)
+  core.project:add_directory(path)
+  core.scan_project(core.project)
+  core.redraw = true
 end
-
-local function strip_trailing_slash(filename)
-  if filename:match("[^:][/\\]$") then
-    return filename:sub(1, -2)
-  end
-  return filename
-end
-
-local function compare_file(a, b)
-  return a.filename < b.filename
-end
-
-
--- compute a file's info entry completed with "filename" to be used
--- in project scan or falsy if it shouldn't appear in the list.
-local function get_project_file_info(root, file)
-  local info = system.get_file_info(root .. file)
-  if info then
-    info.filename = strip_leading_path(file)
-    return (info.size < config.file_size_limit * 1e6 and
-      not common.match_pattern(info.filename, config.ignore_files)
-      and info)
-  end
-end
-
 
 -- Predicate function to inhibit directory recursion in get_directory_files
 -- based on a time limit and the number of files.
@@ -112,51 +101,6 @@ local function timed_max_files_pred(dir, filename, entries_count, t_elapsed)
   local n_limit = entries_count <= config.max_project_files
   local t_limit = t_elapsed < 20 / config.fps
   return n_limit and t_limit and core.project_subdir_is_shown(dir, filename)
-end
-
-
--- "root" will by an absolute path without trailing '/'
--- "path" will be a path starting with '/' and without trailing '/'
---    or the empty string.
---    It will identifies a sub-path within "root.
--- The current path location will therefore always be: root .. path.
--- When recursing "root" will always be the same, only "path" will change.
--- Returns a list of file "items". In eash item the "filename" will be the
--- complete file path relative to "root" *without* the trailing '/'.
-local function get_directory_files(dir, root, path, t, entries_count, recurse_pred, begin_hook)
-  if begin_hook then begin_hook(t) end
-  local t0 = system.get_time()
-  local all = system.list_dir(root .. path) or {}
-  local t_elapsed = system.get_time() - t0
-  local dirs, files = {}, {}
-
-  for _, file in ipairs(all) do
-    local info = get_project_file_info(root, path .. PATHSEP .. file)
-    if info then
-      table.insert(info.type == "dir" and dirs or files, info)
-      entries_count = entries_count + 1
-    end
-  end
-
-  local recurse_complete = true
-  table.sort(dirs, compare_file)
-  for _, f in ipairs(dirs) do
-    table.insert(t, f)
-    if recurse_pred(dir, f.filename, entries_count, t_elapsed) then
-      local _, complete, n = get_directory_files(dir, root, PATHSEP .. f.filename, t, entries_count, recurse_pred, begin_hook)
-      recurse_complete = recurse_complete and complete
-      entries_count = n
-    else
-      recurse_complete = false
-    end
-  end
-
-  table.sort(files, compare_file)
-  for _, f in ipairs(files) do
-    table.insert(t, f)
-  end
-
-  return t, recurse_complete, entries_count
 end
 
 
@@ -178,283 +122,6 @@ local function show_max_files_warning(dir)
     "usage.md at github.com/franko/lite-xl."
   core.status_view:show_message("!", style.accent, message)
 end
-
-
-local function file_search(files, info)
-  local filename, type = info.filename, info.type
-  local inf, sup = 1, #files
-  while sup - inf > 8 do
-    local curr = math.floor((inf + sup) / 2)
-    if system.path_compare(filename, type, files[curr].filename, files[curr].type) then
-      sup = curr - 1
-    else
-      inf = curr
-    end
-  end
-  while inf <= sup and not system.path_compare(filename, type, files[inf].filename, files[inf].type) do
-    if files[inf].filename == filename then
-      return inf, true
-    end
-    inf = inf + 1
-  end
-  return inf, false
-end
-
-
-local function project_scan_add_entry(dir, fileinfo)
-  local index, match = file_search(dir.files, fileinfo)
-  if not match then
-    table.insert(dir.files, index, fileinfo)
-    dir.is_dirty = true
-  end
-end
-
-
-local function files_info_equal(a, b)
-  return a.filename == b.filename and a.type == b.type
-end
-
--- for "a" inclusive from i1 + 1 and i1 + n
-local function files_list_match(a, i1, n, b)
-  if n ~= #b then return false end
-  for i = 1, n do
-    if not files_info_equal(a[i1 + i], b[i]) then
-      return false
-    end
-  end
-  return true
-end
-
--- arguments like for files_list_match
-local function files_list_replace(as, i1, n, bs)
-  local m = #bs
-  local i, j = 1, 1
-  while i <= m or i <= n do
-    local a, b = as[i1 + i], bs[j]
-    if i > n or (j <= m and not files_info_equal(a, b) and
-      not system.path_compare(a.filename, a.type, b.filename, b.type))
-    then
-      table.insert(as, i1 + i, b)
-      i, j, n = i + 1, j + 1, n + 1
-    elseif j > m or system.path_compare(a.filename, a.type, b.filename, b.type) then
-      table.remove(as, i1 + i)
-      n = n - 1
-    else
-      i, j = i + 1, j + 1
-    end
-  end
-end
-
-local function project_subdir_bounds(dir, filename)
-  local index, n = 0, #dir.files
-  for i, file in ipairs(dir.files) do
-    local file = dir.files[i]
-    if file.filename == filename then
-      index, n = i, #dir.files - i
-      for j = 1, #dir.files - i do
-        if not common.path_belongs_to(dir.files[i + j].filename, filename) then
-          n = j - 1
-          break
-        end
-      end
-      return index, n, file
-    end
-  end
-end
-
-local function rescan_project_subdir(dir, filename_rooted)
-  local new_files = get_directory_files(dir, dir.name, filename_rooted, {}, 0, core.project_subdir_is_shown, coroutine.yield)
-  local index, n = 0, #dir.files
-  if filename_rooted ~= "" then
-    local filename = strip_leading_path(filename_rooted)
-    index, n = project_subdir_bounds(dir, filename)
-  end
-
-  if not files_list_match(dir.files, index, n, new_files) then
-    files_list_replace(dir.files, index, n, new_files)
-    dir.is_dirty = true
-    return true
-  end
-end
-
-
-local function add_dir_scan_thread(dir)
-  core.add_thread(function()
-    while true do
-      local has_changes = rescan_project_subdir(dir, "")
-      if has_changes then
-        core.redraw = true -- we run without an event, from a thread
-      end
-      coroutine.yield(5)
-    end
-  end)
-end
-
--- Populate a project folder top directory by scanning the filesystem.
-local function scan_project_folder(index)
-  local dir = core.project_directories[index]
-  local fstype = PLATFORM == "Linux" and system.get_fs_type(dir.name)
-  dir.force_rescan = (fstype == "nfs" or fstype == "fuse")
-  dir.monitor = dirmonitor.new()
-  local t, complete, entries_count = get_directory_files(dir, dir.name, "", {}, 0, timed_max_files_pred, not dir.force_rescan and function(path) 
-    dir.monitor.watch(path)
-  end)
-  if not complete then
-    dir.slow_filesystem = not complete and (entries_count <= config.max_project_files)
-    dir.files_limit = true
-    if core.status_view then
-      show_max_files_warning(dir)
-    end
-  end
-  dir.files = t
-  if dir.force_rescan then
-    add_dir_scan_thread(dir)
-  else
-    core.dir_rescan_add_job(dir, ".")
-  end
-end
-
-
-function core.add_project_directory(path)
-  -- top directories has a file-like "item" but the item.filename
-  -- will be simply the name of the directory, without its path.
-  -- The field item.topdir will identify it as a top level directory.
-  path = common.normalize_volume(path)
-  local dir = {
-    name = path,
-    item = {filename = common.basename(path), type = "dir", topdir = true},
-    files_limit = false,
-    is_dirty = true,
-    shown_subdir = {},
-  }
-  table.insert(core.project_directories, dir)
-  scan_project_folder(#core.project_directories)
-  if path == core.project_dir then
-    core.project_files = dir.files
-  end
-  core.redraw = true
-end
-
-
-function core.update_project_subdir(dir, filename, expanded)
-  local index, n, file = project_subdir_bounds(dir, filename)
-  if index then
-    local new_files = expanded and get_directory_files(dir, dir.name, PATHSEP .. filename, {}, 0, core.project_subdir_is_shown) or {}
-    files_list_replace(dir.files, index, n, new_files)
-    dir.is_dirty = true
-    return true
-  end
-end
-
-
--- Find files and directories recursively reading from the filesystem.
--- Filter files and yields file's directory and info table. This latter
--- is filled to be like required by project directories "files" list.
-local function find_files_rec(root, path)
-  local all = system.list_dir(root .. path) or {}
-  for _, file in ipairs(all) do
-    local file = path .. PATHSEP .. file
-    local info = system.get_file_info(root .. file)
-    if info then
-      info.filename = strip_leading_path(file)
-      if info.type == "file" then
-        coroutine.yield(root, info)
-      else
-        find_files_rec(root, PATHSEP .. info.filename)
-      end
-    end
-  end
-end
-
-
--- Iterator function to list all project files
-local function project_files_iter(state)
-  local dir = core.project_directories[state.dir_index]
-  if state.co then
-    -- We have a coroutine to fetch for files, use the coroutine.
-    -- Used for directories that exceeds the files nuumber limit.
-    local ok, name, file = coroutine.resume(state.co, dir.name, "")
-    if ok and name then
-      return name, file
-    else
-      -- The coroutine terminated, increment file/dir counter to scan
-      -- next project directory.
-      state.co = false
-      state.file_index = 1
-      state.dir_index = state.dir_index + 1
-      dir = core.project_directories[state.dir_index]
-    end
-  else
-    -- Increase file/dir counter
-    state.file_index = state.file_index + 1
-    while dir and state.file_index > #dir.files do
-      state.dir_index = state.dir_index + 1
-      state.file_index = 1
-      dir = core.project_directories[state.dir_index]
-    end
-  end
-  if not dir then return end
-  if dir.files_limit then
-    -- The current project directory is files limited: create a couroutine
-    -- to read files from the filesystem.
-    state.co = coroutine.create(find_files_rec)
-    return project_files_iter(state)
-  end
-  return dir.name, dir.files[state.file_index]
-end
-
-
-function core.get_project_files()
-  local state = { dir_index = 1, file_index = 0 }
-  return project_files_iter, state
-end
-
-
-function core.project_files_number()
-  local n = 0
-  for i = 1, #core.project_directories do
-    if core.project_directories[i].files_limit then return end
-    n = n + #core.project_directories[i].files
-  end
-  return n
-end
-
-
-local function project_dir_by_watch_id(watch_id)
-  for i = 1, #core.project_directories do
-    if core.project_directories[i].watch_id == watch_id then
-      return core.project_directories[i]
-    end
-  end
-end
-
-
-local function project_scan_remove_file(dir, filepath)
-  local fileinfo = { filename = filepath }
-  for _, filetype in ipairs {"dir", "file"} do
-    fileinfo.type = filetype
-    local index, match = file_search(dir.files, fileinfo)
-    if match then
-      table.remove(dir.files, index)
-      dir.is_dirty = true
-      return
-    end
-  end
-end
-
-
-local function project_scan_add_file(dir, filepath)
-  for fragment in string.gmatch(filepath, "([^/\\]+)") do
-    if common.match_pattern(fragment, config.ignore_files) then
-      return
-    end
-  end
-  local fileinfo = get_project_file_info(dir.name, PATHSEP .. filepath)
-  if fileinfo then
-    project_scan_add_entry(dir, fileinfo)
-  end
-end
-
 
 -- create a directory using mkdir but may need to create the parent
 -- directories as well.
@@ -573,6 +240,64 @@ local function reload_on_user_module_save()
   end
 end
 
+function core.load_project()
+  local project_dir = core.recent_projects[1] or "."
+  local project_dir_explicit = false
+  local files = {}
+  local delayed_error
+  
+  for i = 2, #ARGS do
+    local arg_filename = strip_trailing_slash(ARGS[i])
+    local info = system.get_file_info(arg_filename) or {}
+    if info.type == "file" then
+      local file_abs = system.absolute_path(arg_filename)
+      if file_abs then
+        table.insert(files, file_abs)
+        project_dir = file_abs:match("^(.+)[/\\].+$")
+      end
+    elseif info.type == "dir" then
+      project_dir = arg_filename
+      project_dir_explicit = true
+    else
+      -- on macOS we can get an argument like "-psn_0_52353" that we just ignore.
+      if not ARGS[i]:match("^-psn") then
+        delayed_error = string.format("error: invalid file or directory %q", ARGS[i])
+      end
+    end
+  end
+  
+  local project_dir_abs = system.absolute_path(project_dir)
+  
+  do
+    local pdir, pname = project_dir_abs:match("(.*)[/\\\\](.*)")
+    core.log("Opening project %q from directory %s", pname, pdir)
+  end
+  
+  local set_project_ok = project_dir_abs and core.set_project(project_dir_abs)
+  if set_project_ok then
+    if project_dir_explicit then
+      update_recents_project("add", project_dir_abs)
+    end
+  else
+    if not project_dir_explicit then
+      update_recents_project("remove", project_dir)
+    end
+    project_dir_abs = system.absolute_path(".")
+    if not core.set_project(project_dir_abs) then
+      system.show_fatal_error("Lite XL internal error", "cannot set project directory to cwd")
+      os.exit(1)
+    end
+  end
+  if core.project.directories[1].files_limit then
+    show_max_files_warning(core.directories[1])
+  end
+
+  for _, filename in ipairs(files) do
+    core.root_view:open_doc(core.open_doc(filename))
+  end
+  
+  return true, delayed_error
+end
 
 function core.init()
   command = require "core.command"
@@ -603,30 +328,6 @@ function core.init()
     core.previous_replace = session.previous_replace or {}
   end
 
-  local project_dir = core.recent_projects[1] or "."
-  local project_dir_explicit = false
-  local files = {}
-  local delayed_error
-  for i = 2, #ARGS do
-    local arg_filename = strip_trailing_slash(ARGS[i])
-    local info = system.get_file_info(arg_filename) or {}
-    if info.type == "file" then
-      local file_abs = system.absolute_path(arg_filename)
-      if file_abs then
-        table.insert(files, file_abs)
-        project_dir = file_abs:match("^(.+)[/\\].+$")
-      end
-    elseif info.type == "dir" then
-      project_dir = arg_filename
-      project_dir_explicit = true
-    else
-      -- on macOS we can get an argument like "-psn_0_52353" that we just ignore.
-      if not ARGS[i]:match("^-psn") then
-        delayed_error = string.format("error: invalid file or directory %q", ARGS[i])
-      end
-    end
-  end
-
   core.frame_start = 0
   core.clip_rect_stack = {{ 0,0,0,0 }}
   core.log_items = {}
@@ -635,23 +336,6 @@ function core.init()
   core.threads = setmetatable({}, { __mode = "k" })
   core.blink_start = system.get_time()
   core.blink_timer = core.blink_start
-
-  local project_dir_abs = system.absolute_path(project_dir)
-  local set_project_ok = project_dir_abs and core.set_project_dir(project_dir_abs)
-  if set_project_ok then
-    if project_dir_explicit then
-      update_recents_project("add", project_dir_abs)
-    end
-  else
-    if not project_dir_explicit then
-      update_recents_project("remove", project_dir)
-    end
-    project_dir_abs = system.absolute_path(".")
-    if not core.set_project_dir(project_dir_abs) then
-      system.show_fatal_error("Lite XL internal error", "cannot set project directory to cwd")
-      os.exit(1)
-    end
-  end
 
   core.redraw = true
   core.visited_files = {}
@@ -675,27 +359,13 @@ function core.init()
 
   command.add_defaults()
   local got_user_error = not core.load_user_directory()
+  local project_success, project_error = core.load_project() 
+  
+  if project_error then
+    core.error(project_error)
+  end
+  
   local plugins_success, plugins_refuse_list = core.load_plugins()
-
-  do
-    local pdir, pname = project_dir_abs:match("(.*)[/\\\\](.*)")
-    core.log("Opening project %q from directory %s", pname, pdir)
-  end
-  local got_project_error = not core.load_project_module()
-
-  -- We assume we have just a single project directory here. Now that StatusView
-  -- is there show max files warning if needed.
-  if core.project_directories[1].files_limit then
-    show_max_files_warning(core.project_directories[1])
-  end
-
-  for _, filename in ipairs(files) do
-    core.root_view:open_doc(core.open_doc(filename))
-  end
-
-  if delayed_error then
-    core.error(delayed_error)
-  end
 
   if not plugins_success or got_user_error or got_project_error then
     command.perform("core:open-log")
@@ -778,19 +448,10 @@ function core.temp_filename(ext)
       .. string.format("%06x", temp_file_counter) .. (ext or "")
 end
 
--- override to perform an operation before quitting or entering the
--- current project
-do
-  local do_nothing = function() end
-  core.on_quit_project = do_nothing
-  core.on_enter_project = do_nothing
-end
-
-
 local function quit_with_function(quit_fn, force)
   if force then
     delete_temp_files()
-    core.on_quit_project()
+    core.set_project(nil)
     save_session()
     quit_fn()
   else
@@ -873,20 +534,6 @@ function core.load_plugins()
     end
   end
   return no_errors, refused_list
-end
-
-
-function core.load_project_module()
-  local filename = ".lite_project.lua"
-  if system.get_file_info(filename) then
-    return core.try(function()
-      local fn, err = loadfile(filename)
-      if not fn then error("Error when loading project module:\n\t" .. err) end
-      fn()
-      core.log_quiet("Loaded project module")
-    end)
-  end
-  return true
 end
 
 

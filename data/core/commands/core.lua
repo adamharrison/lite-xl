@@ -164,7 +164,7 @@ command.add(nil, {
         core.error("Cannot open folder %q", text)
         return
       end
-      core.confirm_close_docs(core.docs, core.open_folder_project, text)
+      core.confirm_close_docs(core.docs, function() core.set_project(text) end)
     end, suggest_directory)
   end,
 
