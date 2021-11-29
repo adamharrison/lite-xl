@@ -66,10 +66,6 @@ function core.load_project_module()
   return true
 end
 
-function core.scan_project(project)
-  
-end
-
 function core.set_project(project_or_dir, change_project_fn)
   local project = project_or_dir ~= nil and typeof(project) == "string" and project.new(project_or_dir) or project_or_dir
   local chdir_ok = pcall(system.chdir, project.dir)
@@ -83,34 +79,9 @@ function core.set_project(project_or_dir, change_project_fn)
         command.perform("core:open-log")
       end
     end
-    core.scan_project(project)
     return project
   end
   return nil
-end
-
-function core.add_project_directory(path)
-  core.project:add_directory(path)
-  core.scan_project(core.project)
-  core.redraw = true
-end
-
--- Predicate function to inhibit directory recursion in get_directory_files
--- based on a time limit and the number of files.
-local function timed_max_files_pred(dir, filename, entries_count, t_elapsed)
-  local n_limit = entries_count <= config.max_project_files
-  local t_limit = t_elapsed < 20 / config.fps
-  return n_limit and t_limit and core.project_subdir_is_shown(dir, filename)
-end
-
-
-function core.project_subdir_set_show(dir, filename, show)
-  dir.shown_subdir[filename] = show
-end
-
-
-function core.project_subdir_is_shown(dir, filename)
-  return not dir.files_limit or dir.shown_subdir[filename]
 end
 
 
@@ -122,6 +93,15 @@ local function show_max_files_warning(dir)
     "usage.md at github.com/franko/lite-xl."
   core.status_view:show_message("!", style.accent, message)
 end
+
+function core.add_project_directory(path)
+  local dir = core.project:add_directory(path)
+  core.redraw = true
+  if core.status_view and directory.file_limit then
+    show_max_files_warning(dir)
+  end
+end
+
 
 -- create a directory using mkdir but may need to create the parent
 -- directories as well.
@@ -240,6 +220,15 @@ local function reload_on_user_module_save()
   end
 end
 
+
+local function strip_trailing_slash(filename)
+  if filename:match("[^:][/\\]$") then
+    return filename:sub(1, -2)
+  end
+  return filename
+end
+
+
 function core.load_project()
   local project_dir = core.recent_projects[1] or "."
   local project_dir_explicit = false
@@ -296,8 +285,10 @@ function core.load_project()
     core.root_view:open_doc(core.open_doc(filename))
   end
   
+  
   return true, delayed_error
 end
+
 
 function core.init()
   command = require "core.command"
@@ -397,6 +388,12 @@ function core.init()
       end)
   end
 
+  core.add_thread(function()
+    if core.project and core.project:scan() then
+      core.redraw = true
+    end
+  end)
+  
   reload_on_user_module_save()
 end
 
@@ -607,39 +604,14 @@ function core.pop_clip_rect()
 end
 
 
-function core.normalize_to_project_dir(filename)
-  filename = common.normalize_path(filename)
-  if common.path_belongs_to(filename, core.project_dir) then
-    filename = common.relative_path(core.project_dir, filename)
-  end
-  return filename
-end
-
-
--- The function below works like system.absolute_path except it
--- doesn't fail if the file does not exist. We consider that the
--- current dir is core.project_dir so relative filename are considered
--- to be in core.project_dir.
--- Please note that .. or . in the filename are not taken into account.
--- This function should get only filenames normalized using
--- common.normalize_path function.
-function core.project_absolute_path(filename)
-  if filename:match('^%a:\\') or filename:find('/', 1, true) == 1 then
-    return filename
-  else
-    return core.project_dir .. PATHSEP .. filename
-  end
-end
-
-
 function core.open_doc(filename)
   local new_file = not filename or not system.get_file_info(filename)
   local abs_filename
   if filename then
     -- normalize filename and set absolute filename then
     -- try to find existing doc for filename
-    filename = core.normalize_to_project_dir(filename)
-    abs_filename = core.project_absolute_path(filename)
+    filename = core.project:normalize_path(filename)
+    abs_filename = core.project:absolute_path(filename)
     for _, doc in ipairs(core.docs) do
       if doc.abs_filename and abs_filename == doc.abs_filename then
         return doc

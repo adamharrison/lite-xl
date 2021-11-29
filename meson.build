@@ -121,7 +121,6 @@ configure_file(
 )
 
 if not get_option('source-only')
-    subdir('lib/dmon')
     subdir('src')
     subdir('scripts')
 endif

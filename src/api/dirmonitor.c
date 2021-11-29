@@ -12,7 +12,6 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <string.h>
-#include "dirmonitor.h"
 
 struct dirmonitor {
   int fd;
@@ -50,7 +49,7 @@ int check_dirmonitor(struct dirmonitor* monitor, int (*change_callback)(int, voi
         return -1;
       unsigned int idx = dwWaitStatus - WAIT_OBJECT_0;
       if (!FindNextChangeNotification(monitor->handles[idx]))
-        change_callback(idx);
+        change_callback(idx, data);
     }
   #elif __APPLE__
     struct kevent change, event;
@@ -59,7 +58,7 @@ int check_dirmonitor(struct dirmonitor* monitor, int (*change_callback)(int, voi
       int nev = kevent(monitor->fd, NULL, 0, &event, 1, &tm);
       if (nev <= 0)
         return nev;
-      chnage_callback(event->ident);
+      chnage_callback(event->ident, data);
     }
   #elif __linux__
     char buf[4096] __attribute__ ((aligned(__alignof__(struct inotify_event))));
@@ -104,18 +103,18 @@ static int f_dirmonitor_new(lua_State* L) {
 }
 
 static int f_dirmonitor_gc(lua_State* L) {
-  struct dirmonitor** monitor = luaL_checkudata(L, 1, "dirmonitor");
+  struct dirmonitor** monitor = luaL_checkudata(L, 1, API_TYPE_DIRMONITOR);
   deinit_dirmonitor(*monitor);
   return 0;
 }
 
 static int f_dirmonitor_watch(lua_State *L) {
-  lua_pushnumber(L, add_dirmonitor(luaL_checkudata(L, 1, "dirmonitor"), luaL_checkstring(L, 2)) == 0);
+  lua_pushnumber(L, add_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), luaL_checkstring(L, 2)) == 0);
   return 1;
 }
 
 static int f_dirmonitor_check(lua_State* L) {
-  lua_pushboolean(L, check_dirmonitor(luaL_checkudata(L, 1, "dirmonitor"), f_check_dir_callback, L) == 0);
+  lua_pushboolean(L, check_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), f_check_dir_callback, L) == 0);
   return 1;
 }
 static const luaL_Reg dirmonitor_lib[] = {
@@ -126,7 +125,7 @@ static const luaL_Reg dirmonitor_lib[] = {
 };
 
 int luaopen_dirmonitor(lua_State* L) {
-  luaL_newmetatable(L, "dirmonitor");
+  luaL_newmetatable(L, API_TYPE_DIRMONITOR);
   luaL_setfuncs(L, dirmonitor_lib, 0);
   lua_pushvalue(L, -1);
   lua_setfield(L, -2, "__index");

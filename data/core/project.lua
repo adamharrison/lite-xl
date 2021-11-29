@@ -2,6 +2,7 @@ local common = require "core.common"
 local config = require "core.config"
 local project = {}
 
+
 function project:new(dir)
   self.dir = common.normalize_volume(dir)
   self.directories = {}
@@ -13,12 +14,6 @@ local function strip_leading_path(filename)
     return filename:sub(2)
 end
 
-local function strip_trailing_slash(filename)
-  if filename:match("[^:][/\\]$") then
-    return filename:sub(1, -2)
-  end
-  return filename
-end
 
 local function compare_file(a, b)
   return a.filename < b.filename
@@ -51,27 +46,26 @@ function project:add_directory(path)
     shown_subdir = {},
     id_mapping = {}
   }
-  table.insert(core.project_directories, dir)
+  table.insert(self.directories, dir)
   local fstype = PLATFORM == "Linux" and system.get_fs_type(dir.name)
-  dir.scan_type = fstype and (fstype == "nfs" or fstype == "fuse") and "scan" or "monitor"
-  if dir.scan_type == "monitor" then dir.monitor = dirmonitor.new() end
+  if not fstype or (fstype ~= "nfs" and fstype ~= "fuse") then
+    dir.monitor = Dirmonitor.new() 
+  end
   
-  local t, complete, entries_count = get_directory_files(dir, dir.name, "", {}, 0, timed_max_files_pred, dir.scan_type == "monitor" and function(path) 
-    local id = dir.monitor.watch(path)
-    if id then
-      dir.id_mapping[id] = path
-    else
-      dir.scan_type = "scan"
-      dir.monitor = nil
-      dir.id_mapping = {}
+  local t, complete, entries_count = get_directory_files(dir, dir.name, "", {}, 0, timed_max_files_pred, dir.monitor and function(path) 
+    if dir.monitor then 
+      local id = dir.monitor.watch(path)
+      if id then
+        dir.id_mapping[id] = path
+      else
+        dir.monitor = nil
+        dir.id_mapping = {}
+      end
     end
   end)
   if not complete then
     dir.slow_filesystem = not complete and (entries_count <= config.max_project_files)
     dir.files_limit = true
-    if core.status_view then
-      core.show_max_files_warning(dir)
-    end
   end
   dir.files = t
   return dir
@@ -145,6 +139,31 @@ local function rescan_project_subdir(dir, filename_rooted)
   end
 end
 
+
+function project:normalize_path(filename)
+  filename = common.normalize_path(filename)
+  if common.path_belongs_to(filename, self.dir) then
+    filename = common.relative_path(self.dir, filename)
+  end
+  return filename
+end
+
+
+-- The function below works like system.absolute_path except it
+-- doesn't fail if the file does not exist. We consider that the
+-- current dir is core.project_dir so relative filename are considered
+-- to be in core.project_dir.
+-- Please note that .. or . in the filename are not taken into account.
+-- This function should get only filenames normalized using
+-- common.normalize_path function.
+function project:absolute_path(filename)
+  if filename:match('^%a:\\') or filename:find('/', 1, true) == 1 then
+    return filename
+  else
+    return self.dir .. PATHSEP .. filename
+  end
+end
+
 -- "root" will by an absolute path without trailing '/'
 -- "path" will be a path starting with '/' and without trailing '/'
 --    or the empty string.
@@ -153,7 +172,7 @@ end
 -- When recursing "root" will always be the same, only "path" will change.
 -- Returns a list of file "items". In eash item the "filename" will be the
 -- complete file path relative to "root" *without* the trailing '/'.
-function project:get_directory_files(dir, root, path, t, entries_count, recurse_pred, begin_hook)
+local function get_directory_files(dir, root, path, t, entries_count, recurse_pred, begin_hook)
   if begin_hook then begin_hook(t) end
   local t0 = system.get_time()
   local all = system.list_dir(root .. path) or {}
@@ -173,7 +192,7 @@ function project:get_directory_files(dir, root, path, t, entries_count, recurse_
   for _, f in ipairs(dirs) do
     table.insert(t, f)
     if recurse_pred(dir, f.filename, entries_count, t_elapsed) then
-      local _, complete, n = self:get_directory_files(dir, root, PATHSEP .. f.filename, t, entries_count, recurse_pred, begin_hook)
+      local _, complete, n = get_directory_files(dir, root, PATHSEP .. f.filename, t, entries_count, recurse_pred, begin_hook)
       recurse_complete = recurse_complete and complete
       entries_count = n
     else
@@ -190,38 +209,17 @@ function project:get_directory_files(dir, root, path, t, entries_count, recurse_
 end
 
 
-
-local function file_search(files, info)
-  local filename, type = info.filename, info.type
-  local inf, sup = 1, #files
-  while sup - inf > 8 do
-    local curr = math.floor((inf + sup) / 2)
-    if system.path_compare(filename, type, files[curr].filename, files[curr].type) then
-      sup = curr - 1
-    else
-      inf = curr
-    end
-  end
-  while inf <= sup and not system.path_compare(filename, type, files[inf].filename, files[inf].type) do
-    if files[inf].filename == filename then
-      return inf, true
-    end
-    inf = inf + 1
-  end
-  return inf, false
+-- Predicate function to inhibit directory recursion in get_directory_files
+-- based on a time limit and the number of files.
+local function timed_max_files_pred(dir, filename, entries_count, t_elapsed)
+  local n_limit = entries_count <= config.max_project_files
+  local t_limit = t_elapsed < 20 / config.fps
+  return n_limit and t_limit and core.project_subdir_is_shown(dir, filename)
 end
 
 
-local function project_scan_add_entry(dir, fileinfo)
-  local index, match = file_search(dir.files, fileinfo)
-  if not match then
-    table.insert(dir.files, index, fileinfo)
-    dir.is_dirty = true
-  end
-end
 
-
-function project:update_project_subdir(dir, filename, expanded)
+function project:update_subdir(dir, filename, expanded)
   local index, n, file = project_subdir_bounds(dir, filename)
   if index then
     local new_files = expanded and get_directory_files(dir, dir.name, PATHSEP .. filename, {}, 0, core.project_subdir_is_shown) or {}
@@ -229,6 +227,14 @@ function project:update_project_subdir(dir, filename, expanded)
     dir.is_dirty = true
     return true
   end
+end
+
+function project:subdir_set_show(dir, filename, show)
+  dir.shown_subdir[filename] = show
+end
+
+function project:subdir_is_shown(dir, filename)
+  return not dir.files_limit or dir.shown_subdir[filename]
 end
 
 
@@ -304,20 +310,20 @@ function project:project_files_number()
   return n
 end
 
+-- meant to be called in a coroutine
 function project:scan()
+  local has_changes = false
   for i, dir in ipairs(self.directories) do
-    if dir.scan_type == "monitor"
+    if dir.monitor then
       dir.monitor:check(function(id)
-        rescan_project_subdir(dir, dir.id_mapping[id])
+        has_changes = rescan_project_subdir(dir, dir.id_mapping[id]) or has_changes
       end)
     else
-      
+      has_changes = rescan_project_subdir(dir, "") or has_changes
+      coroutine.yield(5)
     end
   end
-end
-
-function project:step()
-  self:scan()
+  return has_changes
 end
 
 return project
