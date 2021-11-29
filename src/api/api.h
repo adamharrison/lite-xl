@@ -7,6 +7,7 @@
 
 #define API_TYPE_FONT "Font"
 #define API_TYPE_PROCESS "Process"
+#define API_TYPE_DIRMONITOR "Dirmonitor"
 
 void api_load_libs(lua_State *L);
 

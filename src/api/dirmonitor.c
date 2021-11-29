@@ -89,3 +89,46 @@ int add_dirmonitor(struct dirmonitor* monitor, const char* path) {
     return inotify_add_watch(monitor->fd, path, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO);
   #endif
 }
+
+static int f_check_dir_callback(int watch_id, void* L) {
+  lua_pcall(L, 1, 1, 0);
+  int result = lua_toboolean(L, -1);
+  lua_pop(L, 1);
+  return !result;
+}
+
+static int f_dirmonitor_new(lua_State* L) {
+  struct dirmonitor** monitor = lua_newuserdata(L, sizeof(struct dirmonitor*));
+  *monitor = init_dirmonitor();
+  return 1;
+}
+
+static int f_dirmonitor_gc(lua_State* L) {
+  struct dirmonitor** monitor = luaL_checkudata(L, 1, "dirmonitor");
+  deinit_dirmonitor(*monitor);
+  return 0;
+}
+
+static int f_dirmonitor_watch(lua_State *L) {
+  lua_pushnumber(L, add_dirmonitor(luaL_checkudata(L, 1, "dirmonitor"), luaL_checkstring(L, 2)) == 0);
+  return 1;
+}
+
+static int f_dirmonitor_check(lua_State* L) {
+  lua_pushboolean(L, check_dirmonitor(luaL_checkudata(L, 1, "dirmonitor"), f_check_dir_callback, L) == 0);
+  return 1;
+}
+static const luaL_Reg dirmonitor_lib[] = {
+  { "new",      f_dirmonitor_new          },
+  { "__gc",     f_dirmonitor_gc          },
+  { "watch",    f_dirmonitor_watch          },
+  { "check",    f_dirmonitor_check          },
+};
+
+int luaopen_dirmonitor(lua_State* L) {
+  luaL_newmetatable(L, "dirmonitor");
+  luaL_setfuncs(L, dirmonitor_lib, 0);
+  lua_pushvalue(L, -1);
+  lua_setfield(L, -2, "__index");
+  return 1;
+}
