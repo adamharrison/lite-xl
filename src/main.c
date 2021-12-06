@@ -14,8 +14,6 @@
   #include <mach-o/dyld.h>
 #endif
 
-#include "dirmonitor.h"
-
 
 SDL_Window *window;
 

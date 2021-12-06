@@ -1,5 +1,4 @@
 #include "api.h"
-#include "dirmonitor.h"
 
 int luaopen_system(lua_State *L);
 int luaopen_renderer(lua_State *L);

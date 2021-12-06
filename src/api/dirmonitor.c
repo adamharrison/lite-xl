@@ -1,11 +1,12 @@
+#include "api.h"
 #include <stdlib.h>
 #ifdef _WIN32
   #include <windows.h>
   #define PATH_MAX MAX_PATH
-#elif __APPLE__
-  #include <sys/event.h>
 #elif __linux__
   #include <sys/inotify.h>
+#else
+  #include <sys/event.h>
 #endif
 #include <unistd.h>
 #include <errno.h>
@@ -13,19 +14,23 @@
 #include <fcntl.h>
 #include <string.h>
 
+#define MAX_WATCHES 8192
+
 struct dirmonitor {
   int fd;
   #if _WIN32
-    HANDLE handles[8192];
+    HANDLE handles[MAX_WATCHES];
   #endif
 };
 
 struct dirmonitor* init_dirmonitor() {
   struct dirmonitor* monitor = calloc(sizeof(struct dirmonitor), 1);
-  #if __APPLE__
-    monitor->fd = kqueue();
-  #elif __linux__
-    monitor->fd = inotify_init1(IN_NONBLOCK);
+  #ifndef _WIN32
+    #if __linux__
+      monitor->fd = inotify_init1(IN_NONBLOCK);
+    #else
+      monitor->fd = kqueue();
+    #endif
   #endif
   return monitor;
 }
@@ -51,15 +56,6 @@ int check_dirmonitor(struct dirmonitor* monitor, int (*change_callback)(int, voi
       if (!FindNextChangeNotification(monitor->handles[idx]))
         change_callback(idx, data);
     }
-  #elif __APPLE__
-    struct kevent change, event;
-    while (1) {
-      struct timespec tm = {0};
-      int nev = kevent(monitor->fd, NULL, 0, &event, 1, &tm);
-      if (nev <= 0)
-        return nev;
-      chnage_callback(event->ident, data);
-    }
   #elif __linux__
     char buf[4096] __attribute__ ((aligned(__alignof__(struct inotify_event))));
     while (1) {
@@ -71,21 +67,45 @@ int check_dirmonitor(struct dirmonitor* monitor, int (*change_callback)(int, voi
       for (char *ptr = buf; ptr < buf + len; ptr += sizeof(struct inotify_event) + ((struct inotify_event*)ptr)->len)
         change_callback(((const struct inotify_event *) ptr)->wd, data);
     }
+  #else
+    struct kevent change, event;
+    while (1) {
+      struct timespec tm = {0};
+      int nev = kevent(monitor->fd, NULL, 0, &event, 1, &tm);
+      if (nev <= 0)
+        return nev;
+      chnage_callback(event->ident, data);
+    }
   #endif
 }
 
 int add_dirmonitor(struct dirmonitor* monitor, const char* path) {
   #if _WIN32
+    if (monitor->fd >= MAX_WATCHES)
+      return -1;
     monitor->handles[monitor->fd++] = FindFirstChangeNotification(path, FALSE, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME);
     return monitor->fd - 1;
-  #elif __APPLE__
+  #elif __linux__
+    return inotify_add_watch(monitor->fd, path, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO);
+  #else
     int fd = open(path, O_RDONLY);
     struct kevent change, event;
     EV_SET(&change, fd, EVFILT_VNODE, EV_ADD | EV_ENABLE, NOTE_DELETE | NOTE_EXTEND | NOTE_WRITE | NOTE_ATTRIB, 0, 0);
     kevent(monitor->fd, &change, 1, NULL, 0, NULL);
     return fd;
-  #elif __linux__
-    return inotify_add_watch(monitor->fd, path, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO);
+  #endif
+}
+
+int remove_dirmonitor(struct dirmonitor* monitor, int fd) {
+  #if _WIN32
+    FindCloseChangeNotification(monitor->handles[fd]);
+    monitor->handles[fd] = NULL;
+    return 0;
+  #elsif __linux__
+    return inotify_rm_watch(monitor->fd, fd);
+  #else
+    close(fd);
+    return 0;
   #endif
 }
 
@@ -103,13 +123,17 @@ static int f_dirmonitor_new(lua_State* L) {
 }
 
 static int f_dirmonitor_gc(lua_State* L) {
-  struct dirmonitor** monitor = luaL_checkudata(L, 1, API_TYPE_DIRMONITOR);
-  deinit_dirmonitor(*monitor);
+  deinit_dirmonitor(*((struct dirmonitor**)luaL_checkudata(L, 1, API_TYPE_DIRMONITOR)));
   return 0;
 }
 
 static int f_dirmonitor_watch(lua_State *L) {
-  lua_pushnumber(L, add_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), luaL_checkstring(L, 2)) == 0);
+  lua_pushnumber(L, add_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), luaL_checkstring(L, 2)));
+  return 1;
+}
+
+static int f_dirmonitor_unwatch(lua_State *L) {
+  lua_pushnumber(L, remove_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), luaL_checknumber(L, 2)));
   return 1;
 }
 
@@ -118,10 +142,11 @@ static int f_dirmonitor_check(lua_State* L) {
   return 1;
 }
 static const luaL_Reg dirmonitor_lib[] = {
-  { "new",      f_dirmonitor_new          },
+  { "new",      f_dirmonitor_new         },
   { "__gc",     f_dirmonitor_gc          },
-  { "watch",    f_dirmonitor_watch          },
-  { "check",    f_dirmonitor_check          },
+  { "watch",    f_dirmonitor_watch       },
+  { "unwatch",  f_dirmonitor_unwatch     },
+  { "check",    f_dirmonitor_check       },
 };
 
 int luaopen_dirmonitor(lua_State* L) {
