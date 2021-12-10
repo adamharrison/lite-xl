@@ -14,12 +14,18 @@
 #include <fcntl.h>
 #include <string.h>
 
-#define MAX_WATCHES 8192
+/*
+This is *slightly* a clusterfuck. Normally, we'd
+have windows wait on a list of handles like inotify,
+however, MAXIMUM_WAIT_OBJECTS is 64. Yes, seriously.
 
+So, for windows, we are recursive.
+*/
 struct dirmonitor {
   int fd;
   #if _WIN32
-    HANDLE handles[MAX_WATCHES];
+    char* paths[64];
+    HANDLE handles[64];
   #endif
 };
 
@@ -96,16 +102,15 @@ int add_dirmonitor(struct dirmonitor* monitor, const char* path) {
   #endif
 }
 
-int remove_dirmonitor(struct dirmonitor* monitor, int fd) {
+void remove_dirmonitor(struct dirmonitor* monitor, int fd) {
   #if _WIN32
-    FindCloseChangeNotification(monitor->handles[fd]);
+    if (monitor->handles[fd])
+      FindCloseChangeNotification(monitor->handles[fd]);
     monitor->handles[fd] = NULL;
-    return 0;
   #elsif __linux__
-    return inotify_rm_watch(monitor->fd, fd);
+    inotify_rm_watch(monitor->fd, fd);
   #else
     close(fd);
-    return 0;
   #endif
 }
 
@@ -133,8 +138,8 @@ static int f_dirmonitor_watch(lua_State *L) {
 }
 
 static int f_dirmonitor_unwatch(lua_State *L) {
-  lua_pushnumber(L, remove_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), luaL_checknumber(L, 2)));
-  return 1;
+  remove_dirmonitor(luaL_checkudata(L, 1, API_TYPE_DIRMONITOR), luaL_checknumber(L, 2));
+  return 0;
 }
 
 static int f_dirmonitor_check(lua_State* L) {
