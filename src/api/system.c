@@ -6,7 +6,6 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include "api.h"
-#include "../dirmonitor.h"
 #include "../rencache.h"
 #ifdef _WIN32
   #include <direct.h>
@@ -253,26 +252,6 @@ top:
       lua_pushstring(L, "mousewheel");
       lua_pushnumber(L, e.wheel.y);
       return 2;
-
-    case SDL_USEREVENT:
-      lua_pushstring(L, "dirchange");
-      lua_pushnumber(L, e.user.code >> 16);
-      switch (e.user.code & 0xffff) {
-        case DMON_ACTION_DELETE:
-          lua_pushstring(L, "delete");
-          break;
-        case DMON_ACTION_CREATE:
-          lua_pushstring(L, "create");
-          break;
-        case DMON_ACTION_MODIFY:
-          lua_pushstring(L, "modify");
-          break;
-        default:
-          return luaL_error(L, "unknown dmon event action: %d", e.user.code & 0xffff);
-      }
-      lua_pushstring(L, e.user.data1);
-      free(e.user.data1);
-      return 4;
 
     default:
       goto top;
@@ -791,34 +770,6 @@ static int f_load_native_plugin(lua_State *L) {
   return result;
 }
 
-static int f_watch_dir(lua_State *L) {
-  const char *path = luaL_checkstring(L, 1);
-  const int recursive = lua_toboolean(L, 2);
-  uint32_t dmon_flags = (recursive ? DMON_WATCHFLAGS_RECURSIVE : 0);
-  dmon_watch_id watch_id = dmon_watch(path, dirmonitor_watch_callback, dmon_flags, NULL);
-  if (watch_id.id == 0) { luaL_error(L, "directory monitoring watch failed"); }
-  lua_pushnumber(L, watch_id.id);
-  return 1;
-}
-
-#if __linux__
-static int f_watch_dir_add(lua_State *L) {
-  dmon_watch_id watch_id;
-  watch_id.id = luaL_checkinteger(L, 1);
-  const char *subdir = luaL_checkstring(L, 2);
-  lua_pushboolean(L, dmon_watch_add(watch_id, subdir));
-  return 1;
-}
-
-static int f_watch_dir_rm(lua_State *L) {
-  dmon_watch_id watch_id;
-  watch_id.id = luaL_checkinteger(L, 1);
-  const char *subdir = luaL_checkstring(L, 2);
-  lua_pushboolean(L, dmon_watch_rm(watch_id, subdir));
-  return 1;
-}
-#endif
-
 #ifdef _WIN32
 #define PATHSEP '\\'
 #else
@@ -904,11 +855,8 @@ static const luaL_Reg lib[] = {
   { "fuzzy_match",         f_fuzzy_match         },
   { "set_window_opacity",  f_set_window_opacity  },
   { "load_native_plugin",  f_load_native_plugin  },
-  { "watch_dir",           f_watch_dir           },
   { "path_compare",        f_path_compare        },
 #if __linux__
-  { "watch_dir_add",       f_watch_dir_add       },
-  { "watch_dir_rm",        f_watch_dir_rm        },
   { "get_fs_type",         f_get_fs_type         },
 #endif
   { NULL, NULL }
