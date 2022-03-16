@@ -104,9 +104,7 @@ local function show_max_files_warning(dir)
     "Too many files in project directory: stopped reading at "..
     config.max_project_files.." files. For more information see "..
     "usage.md at https://github.com/lite-xl/lite-xl."
-  if core.status_view then
-    core.status_view:show_message("!", style.accent, message)
-  end
+  core.error(message)
 end
 
 
@@ -208,6 +206,10 @@ local function refresh_directory(topdir, target)
       old_idx, new_idx = old_idx + size, new_idx + 1
     end
   end
+  if not topdir.files_limit and topdir.files_limit >= config.max_project_files then
+    topdir.files_limit = true
+    show_max_files_warning(topdir)
+  end
   for i, v in ipairs(new_directories) do
     topdir.watch:watch(topdir.name .. PATHSEP .. v.filename)
     if not topdir.files_limit or core.project_subdir_is_shown(topdir, v.filename) then
@@ -254,7 +256,6 @@ function core.add_project_directory(path)
   if not complete then
     topdir.slow_filesystem = not complete and (entries_count <= config.max_project_files)
     topdir.files_limit = true
-    show_max_files_warning(topdir)
     refresh_directory(topdir)
   else
     for i,v in ipairs(t) do
@@ -279,7 +280,7 @@ function core.add_project_directory(path)
           if not dir_match or not core.project_subdir_is_shown(topdir, topdir.files[dir_index].filename) then return end
         end
         return refresh_directory(topdir, dirpath)
-      end, 0.01, 0.01)
+      end, 0.01, 0.01, 0.25)
       coroutine.yield(0.05)
     end
   end)

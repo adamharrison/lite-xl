@@ -12,6 +12,9 @@ function dirwatch.new()
   local t = {
     scanned = {},
     watched = {},
+    last_watched_refresh = {},
+    deferred_watch_refresh = {},
+    last_check = 0,
     reverse_watched = {},
     monitor = dirmonitor.new(),
     windows_watch_top = nil,
@@ -83,28 +86,44 @@ function dirwatch:unwatch(directory)
   end
 end
 
+local function trigger_watch(dirwatch, change_callback, id)
+  if PLATFORM == "Windows" then
+    change_callback(common.dirname(dirwatch.windows_watch_top .. PATHSEP .. id))
+  elseif dirwatch.reverse_watched[id] then
+    change_callback(dirwatch.reverse_watched[id])
+  end
+  return system.get_time()
+end
+
 -- designed to be run inside a coroutine.
-function dirwatch:check(change_callback, scan_time, wait_time)
+function dirwatch:check(change_callback, scan_time, wait_time, min_refresh_time)
   self.monitor:check(function(id)
-    if PLATFORM == "Windows" then
-      change_callback(common.dirname(self.windows_watch_top .. PATHSEP .. id))
-    elseif self.reverse_watched[id] then
-      change_callback(self.reverse_watched[id])
+    if system.get_time() - (self.last_watched_refresh[id] or 0) >= min_refresh_time then
+      self.last_watched_refresh[id] = trigger_watch(self, change_callback, id)
+    else
+      self.deferred_watch_refresh[id] = 1
     end
   end)
-  local start_time = system.get_time()
-  for directory, old_modified in pairs(self.scanned) do
-    if old_modified then
-      local new_modified = system.get_file_info(directory).modified
-      if old_modified < new_modified then
-        change_callback(directory)
-        self.scanned[directory] = new_modified
+  if system.get_time() - self.last_check >= min_refresh_time then
+    for id in pairs(self.deferred_watch_refresh) do
+      self.last_watched_refresh[id] = trigger_watch(self, change_callback, id)
+    end
+    self.deferred_watch_refresh = {}
+    local start_time = system.get_time()
+    for directory, old_modified in pairs(self.scanned) do
+      if old_modified then
+        local new_modified = system.get_file_info(directory).modified
+        if old_modified < new_modified then
+          change_callback(directory)
+          self.scanned[directory] = new_modified
+        end
+      end
+      if system.get_time() - start_time > scan_time then
+        coroutine.yield(wait_time)
+        start_time = system.get_time()
       end
     end
-    if system.get_time() - start_time > scan_time then
-      coroutine.yield(wait_time)
-      start_time = system.get_time()
-    end
+    self.last_check = system.get_time()
   end
 end
 
@@ -202,7 +221,7 @@ function dirwatch.get_directory_files(dir, root, path, t, entries_count, recurse
     if recurse_pred(dir, f.filename, entries_count, t_elapsed) then
       local _, complete, n = dirwatch.get_directory_files(dir, root, f.filename, t, entries_count, recurse_pred)
       recurse_complete = recurse_complete and complete
-      entries_count = n
+      if n ~= nil then entries_count = n end
     else
       recurse_complete = false
     end
