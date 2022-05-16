@@ -43,7 +43,7 @@ size_t match_pattern(struct pattern* pattern, const char* token, size_t length, 
   const char* start_token = token + offset, *end_token = token + length;
   int open_square = 0, inverted_character_class = 0;
   const char* positive_lookahead_assertion = NULL;
-  const char *start_character_class = start_pattern, *end_character_class = NULL;
+  const char *start_character_class = start_pattern;
   int match_min = 1, match_max = 1, match_count = 0;
   int matched_idx = 0;
   bool matches = false;
@@ -216,7 +216,7 @@ static int tokenize_line(lua_State* L, struct syntax* self, struct syntax* targe
         ++offset;
       }
     } else {
-      size_t match_lengths = target->rules[info.rule_idx - 1].patterns[2] ? match_pattern(target->rules[info.rule_idx].patterns[2], line, length, offset, matched_lengths) : 0;
+      size_t match_lengths = target->rules[info.rule_idx - 1].patterns[2] ? match_pattern(target->rules[info.rule_idx - 1].patterns[2], line, length, offset, matched_lengths) : 0;
       if (match_lengths) {
         offset += matched_lengths[0] + 1;
       } else {
@@ -224,7 +224,7 @@ static int tokenize_line(lua_State* L, struct syntax* self, struct syntax* targe
         if (match_lengths > 0) {
           for (int j = 0; j < match_lengths; ++j) {
             offset += matched_lengths[j];
-            amount_matched += emit_token(L, self, j < target->rules[i].symbol_type_length ? &target->rules[info.rule_idx - 1].symbol_types[j] : NULL, offset, last_emission, line, amount_matched);
+            amount_matched += emit_token(L, self, j < target->rules[info.rule_idx - 1].symbol_type_length ? &target->rules[info.rule_idx - 1].symbol_types[j] : NULL, offset, last_emission, line, amount_matched);
             last_emission = offset;
           }
           info.rule_idx = 0;
@@ -251,7 +251,8 @@ struct syntax* get_syntax(struct syntax* self, unsigned long long state) {
 }
 
 static int f_tokenize(lua_State* L) {
-  struct syntax* self = luaL_checkudata(L, 1, "Tokenizer");
+  lua_getfield(L, 1, "native");
+  struct syntax* self = lua_touserdata(L, -1);
   size_t length;
   const char* line = luaL_checklstring(L, 2, &length);
   unsigned long long state = luaL_checkinteger(L, 3);
@@ -262,11 +263,14 @@ static int f_tokenize(lua_State* L) {
   return 2;
 }
 
-
 static int f_new_syntax(lua_State* L) {
   size_t len;
-  struct syntax* self = lua_newuserdata(L, sizeof(struct syntax));
+  lua_newtable(L);
   luaL_setmetatable(L, "Tokenizer");
+  struct syntax* self = lua_newuserdata(L, sizeof(struct syntax));
+  lua_setfield(L, -2, "native");
+  lua_newtable(L);
+  int internal_syntax_table = lua_gettop(L);
   lua_getfield(L, 1, "patterns");
   self->rule_length = lua_rawlen(L, -1);
   self->rules = calloc(self->rule_length, sizeof(struct rule));
@@ -306,7 +310,19 @@ static int f_new_syntax(lua_State* L) {
       const char* str = luaL_checklstring(L, -1, &len);
       strncpy(self->rules[i].symbol_types[0].str, str, sizeof(self->rules[i].symbol_types[0].str));
     }
-    // Still need to do subsyntaxes.
+    lua_pop(L, 1);
+    lua_getfield(L, -1, "syntax");
+    if (lua_type(L, -1) == LUA_TTABLE) {
+      f_new_syntax(L);
+      self->rules[i].subsyntax = lua_touserdata(L, -1);
+      lua_rawseti(L, internal_syntax_table, luaL_len(L, internal_syntax_table) + 1);
+    } else if (lua_type(L, -1) == LUA_TSTRING) {
+      lua_pushvalue(L, 2);
+      lua_pushvalue(L, -2);
+      lua_call(L, 1, 1);
+      lua_getfield(L, -1, "native");
+      self->rules[i].subsyntax = lua_touserdata(L, -1);
+    }
     lua_pop(L, 2);
   }
   lua_pop(L, 1);
@@ -328,12 +344,14 @@ static int f_new_syntax(lua_State* L) {
     lua_pop(L, 1);
   }
   lua_pop(L, 1);
+  lua_setfield(L, -1, "internal_syntaxes");
   qsort(self->symbols, self->symbol_length, sizeof(struct symbol), sort_symbols);
   return 1;
 }
 
 static int f_gc(lua_State* L) {
-  struct syntax* self = luaL_checkudata(L, 1, "Tokenizer");
+  lua_getfield(L, 1, "native");
+  struct syntax* self = lua_touserdata(L, -1);
   for (size_t i = 0; i < self->rule_length; ++i) {
     for (size_t j = 0; j < 3; ++j) {
       if (self->rules[i].patterns[j])
@@ -343,6 +361,7 @@ static int f_gc(lua_State* L) {
     if (self->rules[i].subsyntax)
       free(self->rules[i].subsyntax);
   }
+  free(self->symbols);
   return 0;
 }
 

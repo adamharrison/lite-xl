@@ -6,12 +6,18 @@ local tokenizer = {
   syntaxes = {}
 }
 
-function tokenizer.tokenize(syntax, text, state)
-  local native = tokenizer.syntaxes[syntax]
+function tokenizer.get(syntax_input)
+  local syntax_object = type(syntax_input) == "table" and syntax_input or syntax.get(syntax_input)
+  local native = tokenizer.syntaxes[syntax_object]
   if not native then 
-    native = Tokenizer.new(syntax)
+    native = Tokenizer.new(syntax_object, tokenizer.get)
     tokenizer.syntaxes[syntax] = native
   end
+  return native
+end
+
+function tokenizer.tokenize(syntax, text, state)
+  local native = tokenizer.get(syntax)
   local res, state = native:tokenize(text, state or 0)
   local start = 1
   for i = 2, #res, 2 do
