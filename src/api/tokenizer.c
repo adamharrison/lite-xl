@@ -9,25 +9,37 @@ struct pattern {
   char str[];
 };
 
-struct symbol {
+struct symbol_type {
   char str[12];
 };
 
 struct rule {
   struct pattern* patterns[3];
   struct syntax* subsyntax;
-  unsigned char symbol_length;
-  struct symbol* symbols;
+  unsigned char symbol_type_length;
+  struct symbol_type* symbol_types;
   int flags;
+};
+
+struct symbol {
+  char key[64];
+  char value[12];
 };
 
 struct syntax {
   unsigned char rule_length;
   struct rule* rules;
+  unsigned int symbol_length;
+  struct symbol* symbols;
 };
 
-static size_t match_pattern(struct pattern* pattern, const char* token, size_t length, size_t offset, size_t* matched_lengths) {
+static int sort_symbols(const void* a, const void* b) { return strcmp(((struct symbol*)a)->key, ((struct symbol*)b)->key); }
+
+// This pattern matching function should be identical lua's with the following enhancements:
+// %a, %w, %l, %u, %c match any UTF-8 character over codepoint 128.
+size_t match_pattern(struct pattern* pattern, const char* token, size_t length, size_t offset, size_t* matched_lengths) {
   const char* start_pattern = pattern->str;
+  size_t last_offset = offset;
   const char* start_token = token + offset, *end_token = token + length;
   int open_square = 0, inverted_character_class = 0;
   const char* positive_lookahead_assertion = NULL;
@@ -36,9 +48,11 @@ static size_t match_pattern(struct pattern* pattern, const char* token, size_t l
   int matched_idx = 0;
   bool matches = false;
   while (*start_pattern) {
-    fprintf(stderr, "PATTERN: %s | TOKEN: %s | %d\n", start_pattern, start_token, open_square);
-    fflush(stderr);
-    if (start_token == end_token) return 0;
+    if (start_token == end_token) {
+      if (match_count >= match_min)
+        break;
+      return 0;
+    }
     if (open_square && matches && *start_pattern != ']') {
       ++start_pattern;
       continue;
@@ -48,9 +62,21 @@ static size_t match_pattern(struct pattern* pattern, const char* token, size_t l
       case '.': matches = true; break;
       case '^': if (start_token != token) return 0; break;
       case '$': if (start_token < token + length) return 0; break;
-      case '(': start_pattern++; continue; break;
-      case ')': matched_lengths[matched_idx++] = start_token - (token + offset); offset += (start_token - token); break;
-      case '[': if (open_square++ == 0) start_character_class = start_pattern; ++start_pattern; if (*start_pattern == '^') inverted_character_class = 1; continue; break;
+      case '(': if (open_square > 0) goto default_match; start_pattern++; continue; break;
+      case ')': 
+        if (open_square > 0) 
+          goto default_match; 
+        matched_lengths[matched_idx++] = start_token - (token + offset);
+        offset += start_token - (token + last_offset);
+        last_offset = offset;
+        start_character_class = ++start_pattern;
+        continue;
+      case '[': 
+        if (open_square++ == 0) 
+          start_character_class = start_pattern++;
+        if (*start_pattern == '^')
+          inverted_character_class = 1; 
+        continue;
       case ']': --open_square; break;
       case '%': {
         char type = *(start_pattern+1);
@@ -71,11 +97,11 @@ static size_t match_pattern(struct pattern* pattern, const char* token, size_t l
           matches = !matches;
         ++start_pattern;
       } break;
-      default: matches = (*start_pattern == *start_token); break;
+      default: 
+      default_match:
+        matches = (*start_pattern == *start_token); break;
     }
     bool recent_match = matches;
-    fprintf(stderr, "PATTERNW: %s | TOKEN: %s | %d\n", start_pattern, start_token, recent_match);
-    fflush(stderr);
     if (matches) {
       if (open_square)
         continue;
@@ -84,7 +110,7 @@ static size_t match_pattern(struct pattern* pattern, const char* token, size_t l
     }
     if (!open_square || *start_pattern == ']') {
       if (positive_lookahead_assertion) {
-         ++start_pattern;
+         //++start_pattern;
          start_token = positive_lookahead_assertion - 1;
          positive_lookahead_assertion = NULL;
       }
@@ -136,9 +162,18 @@ static struct subsyntax_info get_subsyntax_details(unsigned long long state) {
   return (struct subsyntax_info){ state & 0xFF, 0 };
 }
 
-static int emit_token(lua_State* L, struct symbol* symbol, int offset, int start, int idx) {
+static int emit_token(lua_State* L, struct syntax* self, struct symbol_type* symbol_type, int offset, int start, const char* str, int idx) {
   if (offset - start > 0) {
-    lua_pushstring(L, symbol ? symbol->str : "normal");
+    if (symbol_type) {
+      struct symbol key, *target = NULL; 
+      if (offset - start < sizeof(key.key)) {
+        strncpy(key.key, &str[start], offset - start);
+        key.key[offset - start] = 0;
+        target = bsearch(&key, self->symbols, self->symbol_length, sizeof(struct symbol), sort_symbols);
+      }
+      lua_pushstring(L, target ? target->value : symbol_type->str);
+    } else
+      lua_pushliteral(L, "normal");
     lua_rawseti(L, -2, idx * 2 + 1);
     lua_pushinteger(L, offset - start);
     lua_rawseti(L, -2, idx * 2 + 2);
@@ -158,15 +193,18 @@ static int tokenize_line(lua_State* L, struct syntax* self, struct syntax* targe
       for (i = 0; i < target->rule_length; ++i) {
         size_t match_lengths = match_pattern(target->rules[i].patterns[0], line, length, offset, matched_lengths);
         if (match_lengths > 0) {
+          // fprintf(stderr, "MATCH: %s %s\n", target->rules[i].patterns[0]->str, &line[offset]);
           if (target->rules[i].patterns[1]) {
             info.rule_idx = i + 1;
             offset += matched_lengths[0];
           } else {
-            amount_matched += emit_token(L, NULL, offset, last_emission, amount_matched);
-            *state = (*state & ~(0xFF << (info.subsyntax_idx * 8))) | (i << (info.rule_idx * 8));
+            amount_matched += emit_token(L, self, NULL, offset, last_emission, line, amount_matched);
+            if (target->rules[i].subsyntax)
+              *state = (*state & ~(0xFF << (info.subsyntax_idx * 8))) | (i << (info.subsyntax_idx * 8));
+              
             last_emission = offset;
             for (int j = 0; j < match_lengths; ++j) {
-              amount_matched += emit_token(L, j < target->rules[i].symbol_length ? &target->rules[i].symbols[j] : NULL, last_emission + matched_lengths[j], last_emission, amount_matched);
+              amount_matched += emit_token(L, self, j < target->rules[i].symbol_type_length ? &target->rules[i].symbol_types[j] : NULL, last_emission + matched_lengths[j], last_emission, line, amount_matched);
               last_emission += matched_lengths[j];
               offset += matched_lengths[j];
             }
@@ -174,8 +212,9 @@ static int tokenize_line(lua_State* L, struct syntax* self, struct syntax* targe
           break;
         }
       }
-      if (i == target->rule_length)
+      if (i == target->rule_length) {
         ++offset;
+      }
     } else {
       size_t match_lengths = target->rules[info.rule_idx - 1].patterns[2] ? match_pattern(target->rules[info.rule_idx].patterns[2], line, length, offset, matched_lengths) : 0;
       if (match_lengths) {
@@ -185,7 +224,7 @@ static int tokenize_line(lua_State* L, struct syntax* self, struct syntax* targe
         if (match_lengths > 0) {
           for (int j = 0; j < match_lengths; ++j) {
             offset += matched_lengths[j];
-            amount_matched += emit_token(L, j < target->rules[i].symbol_length ? &target->rules[info.rule_idx - 1].symbols[j] : NULL, offset, last_emission, amount_matched);
+            amount_matched += emit_token(L, self, j < target->rules[i].symbol_type_length ? &target->rules[info.rule_idx - 1].symbol_types[j] : NULL, offset, last_emission, line, amount_matched);
             last_emission = offset;
           }
           info.rule_idx = 0;
@@ -195,7 +234,7 @@ static int tokenize_line(lua_State* L, struct syntax* self, struct syntax* targe
       }
     }
   }
-  amount_matched += emit_token(L, info.rule_idx > 0 ? &target->rules[info.rule_idx - 1].symbols[0] : NULL, offset, last_emission, amount_matched);
+  amount_matched += emit_token(L, self, info.rule_idx > 0 ? &target->rules[info.rule_idx - 1].symbol_types[0] : NULL, offset, last_emission, line, amount_matched);
   *state = (*state & ~(0xFF << (info.rule_idx * 8))) | (info.rule_idx << (info.subsyntax_idx * 8));
   return amount_matched;
 }
@@ -222,6 +261,7 @@ static int f_tokenize(lua_State* L) {
   lua_pushinteger(L, state);
   return 2;
 }
+
 
 static int f_new_syntax(lua_State* L) {
   size_t len;
@@ -250,27 +290,45 @@ static int f_new_syntax(lua_State* L) {
     lua_pop(L, 1);
     lua_getfield(L, -1, "type");
     if (lua_type(L, -1) == LUA_TTABLE) {
-      self->rules[i].symbol_length = lua_rawlen(L, -1);
-      self->rules[i].symbols = calloc(self->rules[i].symbol_length, sizeof(struct symbol));
-      for (size_t j = 0; j < self->rules[i].symbol_length; ++j) {
+      self->rules[i].symbol_type_length = lua_rawlen(L, -1);
+      self->rules[i].symbol_types = calloc(self->rules[i].symbol_type_length, sizeof(struct symbol_type));
+      for (size_t j = 0; j < self->rules[i].symbol_type_length; ++j) {
         lua_rawgeti(L, -1, j+1);
         const char* str = luaL_checklstring(L, -1, &len);
-        strncpy(self->rules[i].symbols[0].str, str, sizeof(self->rules[i].symbols[0].str));
+        strncpy(self->rules[i].symbol_types[j].str, str, sizeof(self->rules[i].symbol_types[j].str));
         lua_pop(L, 1);
       }
     } else {
       lua_getfield(L, 1, "name");
       lua_pop(L, 1);
-      self->rules[i].symbol_length = 1;
-      self->rules[i].symbols = calloc(self->rules[i].symbol_length, sizeof(struct symbol));
+      self->rules[i].symbol_type_length = 1;
+      self->rules[i].symbol_types = calloc(self->rules[i].symbol_type_length, sizeof(struct symbol_type));
       const char* str = luaL_checklstring(L, -1, &len);
-      strncpy(self->rules[i].symbols[0].str, str, sizeof(self->rules[i].symbols[0].str));
+      strncpy(self->rules[i].symbol_types[0].str, str, sizeof(self->rules[i].symbol_types[0].str));
     }
-    lua_pop(L, 1);
-    lua_getfield(L, -2, "syntax");
+    // Still need to do subsyntaxes.
     lua_pop(L, 2);
   }
   lua_pop(L, 1);
+  lua_getfield(L, 1, "symbols");
+  luaL_checktype(L, -1, LUA_TTABLE);
+  lua_pushnil(L); 
+  self->symbol_length = 0;
+  while (lua_next(L, -2) != 0) {
+    ++self->symbol_length;
+    lua_pop(L, 1);
+  }
+  lua_pushnil(L); 
+  int i = 0;
+  self->symbols = calloc(sizeof(struct symbol), self->symbol_length);
+  while (lua_next(L, -2) != 0) {
+    strncpy(self->symbols[i].key, luaL_checkstring(L, -2), sizeof(self->symbols[i].key));
+    strncpy(self->symbols[i].value, luaL_checkstring(L, -1), sizeof(self->symbols[i].value));
+    ++i;
+    lua_pop(L, 1);
+  }
+  lua_pop(L, 1);
+  qsort(self->symbols, self->symbol_length, sizeof(struct symbol), sort_symbols);
   return 1;
 }
 
@@ -281,7 +339,7 @@ static int f_gc(lua_State* L) {
       if (self->rules[i].patterns[j])
         free(self->rules[i].patterns[j]);
     }
-    free(self->rules[i].symbols);
+    free(self->rules[i].symbol_types);
     if (self->rules[i].subsyntax)
       free(self->rules[i].subsyntax);
   }
@@ -296,7 +354,6 @@ static const luaL_Reg tokenizer_lib[] = {
 };
 
 int luaopen_tokenizer(lua_State* L) {
-  luaL_openlibs(L);
   luaL_newmetatable(L, "Tokenizer");
   luaL_setfuncs(L, tokenizer_lib, 0);
   lua_pushvalue(L, -1);
