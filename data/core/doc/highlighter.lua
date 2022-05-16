@@ -26,7 +26,7 @@ function Highlighter:new(doc)
           local state = (i > 1) and self.lines[i - 1].state
           local line = self.lines[i]
           if not (line and line.init_state == state and line.text == self.doc.lines[i]) then
-            self.lines[i] = self:tokenize_line(i, state)
+            self.lines[i] = self:tokenize_line(i, state, true)
           end
         end
 
@@ -72,18 +72,18 @@ function Highlighter:remove_notify(line, n)
 end
 
 
-function Highlighter:tokenize_line(idx, state)
+function Highlighter:tokenize_line(idx, state, quick)
   local res = {}
   res.init_state = state
   res.text = self.doc.lines[idx]
-  res.tokens, res.state = tokenizer.tokenize(self.doc.syntax, res.text, state)
+  res.tokens, res.state = tokenizer.tokenize(self.doc.syntax, res.text, state, quick)
   return res
 end
 
 
 function Highlighter:get_line(idx)
   local line = self.lines[idx]
-  if not line or line.text ~= self.doc.lines[idx] then
+  if not line or line.text ~= self.doc.lines[idx] or not line.tokens then
     local prev = self.lines[idx - 1]
     line = self:tokenize_line(idx, prev and prev.state)
     self.lines[idx] = line
