@@ -368,7 +368,15 @@ static int process_start(lua_State* L) {
     cmd_len = 1;
   }
 
+  const char* persist_key = NULL;
   if (arg_len > 1) {
+    lua_getfield(L, 2, "persist");
+    if (!lua_isnil(L, -1)) {
+      persist_key = luaL_checkstring(L, -1);
+      lua_getfield(L, LUA_REGISTRYINDEX, "process_cache");
+      if (!lua_isnil(L, -1))
+        return 1;
+    }
     lua_getfield(L, 2, "env");
     if (!lua_isnil(L, -1)) {
       lua_pushnil(L);
@@ -602,6 +610,12 @@ static int process_start(lua_State* L) {
     return lua_error(L);
 
   self->running = true;
+  if (persist_key) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "process_cache");
+    lua_pushvalue(L, -2);
+    lua_setfield(L, -2, persist_key);
+    lua_pop(L, 1);
+  }
   return retval;
 }
 

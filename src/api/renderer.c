@@ -78,6 +78,11 @@ static int font_get_options(
   return 0;
 }
 
+static void lua_pushfonthash(lua_State* L, const char* filename, float size, int style, ERenFontHinting hinting, ERenFontAntialiasing antialiasing) {
+  lua_pushstring(L, filename), lua_pushnumber(L, size), lua_pushnumber(L, style), lua_pushnumber(L, hinting), lua_pushnumber(L, antialiasing);
+  lua_concat(L, 5);
+}
+
 static int f_font_load(lua_State *L) {
   const char *filename  = luaL_checkstring(L, 1);
   float size = luaL_checknumber(L, 2);
@@ -89,11 +94,23 @@ static int f_font_load(lua_State *L) {
   if (ret_code > 0)
     return ret_code;
 
+  lua_pushfonthash(L, filename, size, style, hinting, antialiasing);
+  lua_getfield(L, LUA_REGISTRYINDEX, "font_cache");
+  lua_pushvalue(L, -2);
+  lua_rawget(L, -2);
+  if (!lua_isnil(L, -1))
+    return 1;
+  lua_pop(L, 1);
+  lua_pushvalue(L, -2);
   RenFont** font = lua_newuserdata(L, sizeof(RenFont*));
   *font = ren_font_load(&window_renderer, filename, size, antialiasing, hinting, style);
   if (!*font)
     return luaL_error(L, "failed to load font");
   luaL_setmetatable(L, API_TYPE_FONT);
+  lua_pushvalue(L, -1);
+  lua_replace(L, -5);
+  lua_rawset(L, -3);
+  lua_pop(L, 1);
   return 1;
 }
 
@@ -124,18 +141,28 @@ static int f_font_copy(lua_State *L) {
   if (ret_code > 0)
     return ret_code;
 
+  lua_getfield(L, LUA_REGISTRYINDEX, "font_cache");
+  int font_table_index = lua_gettop(L);
   if (table) {
     lua_newtable(L);
     luaL_setmetatable(L, API_TYPE_FONT);
   }
   for (int i = 0; i < FONT_FALLBACK_MAX && fonts[i]; ++i) {
-    RenFont** font = lua_newuserdata(L, sizeof(RenFont*));
-    *font = ren_font_copy(&window_renderer, fonts[i], size, antialiasing, hinting, style);
-    if (!*font)
-      return luaL_error(L, "failed to copy font");
-    luaL_setmetatable(L, API_TYPE_FONT);
-    if (table)
-      lua_rawseti(L, -2, i+1);
+      lua_pushfonthash(L, ren_font_get_path(fonts[i]), size, style, hinting, antialiasing);
+      lua_rawget(L, font_table_index);
+      if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        RenFont** font = lua_newuserdata(L, sizeof(RenFont*));
+        *font = ren_font_copy(&window_renderer, fonts[i], size, antialiasing, hinting, style);
+        if (!*font)
+          return luaL_error(L, "failed to copy font");
+        luaL_setmetatable(L, API_TYPE_FONT);
+        lua_pushfonthash(L, ren_font_get_path(fonts[i]), size, style, hinting, antialiasing);
+        lua_pushvalue(L, -2);
+        lua_rawset(L, font_table_index);
+      }
+      if (table)
+        lua_rawseti(L, -2, i+1);
   }
   return 1;
 }
@@ -389,5 +416,11 @@ int luaopen_renderer(lua_State *L) {
   lua_pushvalue(L, -1);
   lua_setfield(L, -2, "__index");
   lua_setfield(L, -2, "font");
+  lua_getfield(L, LUA_REGISTRYINDEX, "font_cache");
+  if (lua_isnil(L, -1)) {
+    lua_newtable(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, "font_cache");
+  }
+  lua_pop(L, 1);
   return 1;
 }
