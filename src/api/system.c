@@ -1149,6 +1149,28 @@ static int f_text_input(lua_State* L) {
   return 0;
 }
 
+static void restore_metatable(lua_State* L) {
+  if (lua_type(L, -1) == LUA_TTABLE || lua_type(L, -1) == LUA_TUSERDATA) {
+    lua_getmetatable(L, -1);
+    if (!lua_isnil(L, -1)) {
+      lua_getfield(L, -1, "__name");
+      if (!lua_isnil(L, -1)) {
+        const char* name = lua_tostring(L, -1);
+        luaL_getmetatable(L, name);
+        lua_setmetatable(L, -4);
+      }
+      lua_pop(L, 1);
+    }
+    lua_pop(L, 1);
+    if (lua_type(L, -1) == LUA_TTABLE) {
+      lua_pushnil(L);
+      while (lua_next(L, -2)) {
+        restore_metatable(L);
+        lua_pop(L, 1);
+      }
+    }
+  }
+}
 
 static int f_cache(lua_State* L) {
   const char* key = luaL_checkstring(L, 1);
@@ -1158,6 +1180,7 @@ static int f_cache(lua_State* L) {
     lua_setfield(L, -2, key);
   }
   lua_getfield(L, -1, key);
+  restore_metatable(L);
   return 1;
 }
 

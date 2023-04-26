@@ -265,9 +265,10 @@ init_lua:
   lua_pcall(L, 0, 1, 0);
   if (lua_toboolean(L, -1)) {
     lua_newtable(L);
-    lua_rawseti(L, LUA_REGISTRYINDEX, LUA_RIDX_GLOBALS);
-    lua_newtable(L);
-    lua_setfield(L, LUA_REGISTRYINDEX, LUA_LOADED_TABLE);
+    lua_pushthread(L), lua_rawseti(L, -2, LUA_RIDX_MAINTHREAD);
+    lua_newtable(L), lua_rawseti(L, -2, LUA_RIDX_GLOBALS);
+    lua_getfield(L, LUA_REGISTRYINDEX, "cache"), lua_setfield(L, -2, "cache");
+    lua_replace(L, LUA_REGISTRYINDEX);
     lua_gc(L, LUA_GCCOLLECT, 0);
     rencache_invalidate();
     goto init_lua;

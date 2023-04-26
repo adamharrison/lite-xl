@@ -7,10 +7,10 @@ function renderer.font.load(path, size, options)
   return system.cache(key, system.cache(key) or old_font_load(path, size, options))
 end
 
-function renderer.font:copy(size, options)
-  if type(self) ~= "table" then return renderer.font.load(self:get_path(), size, options) end
+function renderer.font.copy(font, size, options)
+  if type(font) ~= "table" then return renderer.font.load(font:get_path(), size, options) end
   local t = {}
-  for i, font in ipairs(self) do
+  for i, font in ipairs(font) do
     table.insert(t, font:copy(options))
   end
   return renderer.font.group(t)
