@@ -87,7 +87,7 @@ jobs:
       # - name: Install Dependencies
       #   run: bash scripts/install-dependencies.sh --debug
       - name: Build
-        run: scripts/build.sh --forcefallback --portable
+        run: scripts/build.sh --forcefallback --portable --addons
       - name: Package
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
@@ -132,9 +132,9 @@ jobs:
         run: |
           for ARCH in ARCHES; do;
             [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch ${{ matrix.arch }}" >> "$GITHUB_ENV"
-            scripts/build.sh --portable --forcefallback $CROSS
+            scripts/build.sh --portable --forcefallback $CROSS --addons
             tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar -C build-$ARCH-darwin lite-xl && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
-            scripts/build.sh --bundle --forcefallback $CROSS
+            scripts/build.sh --bundle --forcefallback $CROSS --addons
           done
       - name: Create DMG Images
         run:
@@ -191,7 +191,7 @@ jobs:
       run: scripts/build.sh -U --debug --forcefallback
     - name: Package
       run: |
-        cd build-x86_64-windows; zip ../$INSTALL_NAME.zip -r lite-xl; cd ..
+        cd build-x86_64-windows && zip ../$INSTALL_NAME.zip -r lite-xl && cd ..
         scripts/package-innosetup.sh --debug --version ${{ needs.version.outputs.ref }}
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3
@@ -244,24 +244,19 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/lite-xl/lite-xl-build-box:latest
     steps:
+      - uses: actions/checkout@v3
       - name: Download Artfacts
         uses: actions/download-artifact@v3
         with:
           path: .
       - name: Create Release
-        id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ needs.version.outputs.ref }}
-          name: Lite XL ${{ needs.version.outputs.ref }}
+          tag_name: ${{ needs.version.outputs.release }}
+          name: Lite XL ${{ needs.version.outputs.release }}
           draft: true
           body_path: changelog.md
           generate_release_notes: true
-      - name: Upload Files
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.version.outputs.ref }}
-          draft: true
           files: |
             *.tar.gz
             *.zip
