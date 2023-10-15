@@ -6,6 +6,12 @@ if [ ! -e "src/api/api.h" ]; then
   exit 1
 fi
 
+source scripts/common.sh
+
+BUILD_DIR="$(get_default_build_dir)"
+
+[[ ! -e $BUILD_DIR ]] && scripts/build.sh $@
+
 cat > lite-xl-dmg.json << EOF
 {
   "title": "Lite XL",

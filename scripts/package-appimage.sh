@@ -27,8 +27,6 @@ show_help(){
   echo
 }
 
-initial_arg_count=$#
-
 for i in "$@"; do
   case $i in
     -h|--help)
@@ -78,6 +76,8 @@ download_appimage_apprun() {
 }
 
 generate_appimage() {
+  [[ ! -e $BUILD_DIR ]] && scripts/build.sh $@
+
   if [ -e LiteXL.AppDir ]; then
     rm -rf LiteXL.AppDir
   fi
@@ -102,5 +102,4 @@ generate_appimage() {
 
 setup_appimagetool
 download_appimage_apprun
-[[ ! -e $BUILD_DIR ]] && scripts/build.sh $@
 generate_appimage

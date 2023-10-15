@@ -67,10 +67,14 @@ jobs:
       CXX: ${{ matrix.config.cxx }}
       ARCH: x86_64
     steps:
+      - name: System Information
+        run: |
+          system_profiler SPSoftwareDataType
+          bash --version
+          $CC -v
       - name: Set Environment Variables
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
-          bash --version
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-$ARCH-linux" >> "$GITHUB_ENV"
       - uses: actions/checkout@v3
@@ -83,12 +87,12 @@ jobs:
       # - name: Install Dependencies
       #   run: bash scripts/install-dependencies.sh --debug
       - name: Build
-        run: bash scripts/build.sh --forcefallback --portable
+        run: scripts/build.sh --forcefallback --portable
       - name: Package
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
-          bash scripts/appimage.sh --debug --version ${{ needs.version.outputs.ref }}
-          tar -cvf $INSTALL_NAME.tar build-$ARCH-linux/* && gzip $INSTALL_NAME.tar
+          tar -cvf $INSTALL_NAME.tar -C build-$ARCH-linux lite-xl && gzip $INSTALL_NAME.tar
+          scripts/appimage.sh --debug --version ${{ needs.version.outputs.ref }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         if: ${{ matrix.config.cc == 'gcc' }}
@@ -123,23 +127,23 @@ jobs:
         with:
           python-version: 3.9
       - name: Install Dependencies
-        run: bash scripts/install-dependencies.sh --debug
+        run: scripts/install-dependencies.sh --debug
       - name: Build
         run: |
           for ARCH in ARCHES; do;
             [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch ${{ matrix.arch }}" >> "$GITHUB_ENV"
-            bash scripts/build.sh --bundle --forcefallback $CROSS
-            bash scripts/build.sh --portable --forcefallback $CROSS
-            tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar build-$ARCH-darwin/* && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
+            scripts/build.sh --portable --forcefallback $CROSS
+            tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar -C build-$ARCH-darwin lite-xl && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
+            scripts/build.sh --bundle --forcefallback $CROSS
           done
       - name: Create DMG Images
         run:
           export DMGS=""
           for ARCH in ARCHES; do;
-            bash scripts/package-dmg.sh --version ${{ needs.version.outputs.ref }} --debug --dmg
+            scripts/package-dmg.sh --version ${{ needs.version.outputs.ref }} --debug
             export DMGS="$DMGS $INSTALL_PREFIX-$ARCH-darwin"
           done
-          bash scripts/package-universal-dmg.sh $DMGS
+          scripts/package-universal-dmg.sh $DMGS
       - name: Upload Mac Images
         uses: actions/upload-artifact@v3
         with:
@@ -184,11 +188,11 @@ jobs:
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-x86-windows" >> "$GITHUB_ENV"
         fi
     - name: Build
-      run: bash scripts/build.sh -U --debug --forcefallback
+      run: scripts/build.sh -U --debug --forcefallback
     - name: Package
       run: |
-        zip $INSTALL_NAME.zip -r build-x86_64-windows/*
-        bash scripts/package-innosetup.sh --debug --version ${{ needs.version.outputs.ref }}
+        cd build-x86_64-windows; zip ../$INSTALL_NAME.zip -r lite-xl; cd ..
+        scripts/package-innosetup.sh --debug --version ${{ needs.version.outputs.ref }}
     - name: Upload Artifacts
       uses: actions/upload-artifact@v3
       with:

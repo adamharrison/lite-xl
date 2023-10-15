@@ -70,6 +70,8 @@ main() {
     exit 1
   fi
 
+  [[ ! -e $build_dir ]] && scripts/build.sh $@
+
   output="lite-xl-${version}-${arch_file}-windows-setup"
 
   "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" -dARCH=$arch //F"${output}" "${build_dir}/scripts/innosetup.iss"
