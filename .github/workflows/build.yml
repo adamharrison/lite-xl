@@ -41,7 +41,7 @@ jobs:
       #     tag_name: ${{ steps.tag.outputs.version }}
       #   env:
       #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -79,7 +79,7 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-$ARCH-linux" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       # - name: Python Setup
       #   uses: actions/setup-python@v4
       #   with:
@@ -123,7 +123,7 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_PREFIX=lite-xl-${{ needs.version.outputs.ref }}" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Python Setup
         uses: actions/setup-python@v4
         with:
@@ -167,7 +167,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
     - uses: msys2/setup-msys2@v2
       with:
         msystem: ${{ matrix.config.msystem }}
@@ -211,7 +211,7 @@ jobs:
           # - { target: x86, name: i686 }
           - { target: x64, name: x86_64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch.target }}
@@ -246,7 +246,7 @@ jobs:
     container: ghcr.io/lite-xl/lite-xl-build-box:latest
     if: ${{ needs.version.outputs.release }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Download Artfacts
         uses: actions/download-artifact@v3
         with:
