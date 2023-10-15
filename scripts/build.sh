@@ -195,6 +195,7 @@ main() {
   fi
 
   CFLAGS=$CFLAGS LDFLAGS=$LDFLAGS meson setup \
+    "${build_dir}" \
     --buildtype "$build_type" \
     --prefix "$prefix" \
     "${cross_file[@]}" \
@@ -202,7 +203,6 @@ main() {
     $bundle \
     $portable \
     $pgo \
-    "${build_dir}"
 
   meson compile -C "${build_dir}"
 

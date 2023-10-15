@@ -151,6 +151,7 @@ jobs:
             export DMGS="$DMGS $INSTALL_PREFIX-$ARCH-darwin"
           done
           scripts/package-universal-dmg.sh $DMGS
+          lipo -create -output universal_app build-$ARCH-darwin/lite-xl/lite-xl
       - name: Upload Mac Images
         uses: actions/upload-artifact@v3
         with:
