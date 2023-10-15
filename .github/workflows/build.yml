@@ -23,6 +23,7 @@ jobs:
   # Checks to see if we have an input, and stamps that onto the repo.
   # Determines if this is a release, and determines the official ref.
   version:
+    runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.check_release.outputs.release }}
       ref: ${{ steps.check_release.outputs.ref }}
