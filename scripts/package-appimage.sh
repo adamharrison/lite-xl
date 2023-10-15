@@ -11,9 +11,7 @@ source scripts/common.sh
 ARCH="$(uname -m)"
 BUILD_DIR="$(get_default_build_dir)"
 RUN_BUILD=true
-STATIC_BUILD=false
 ADDONS=false
-BUILD_TYPE="debug"
 
 show_help(){
   echo
@@ -26,10 +24,7 @@ show_help(){
   echo "                          Default: '${BUILD_DIR}'."
   echo "   --debug                Debug this script."
   echo "-n --nobuild              Skips the build step, use existing files."
-  echo "-s --static               Specify if building using static libraries."
   echo "-v --version VERSION      Specify a version, non whitespace separated string."
-  echo "-a --addons               Install 3rd party addons."
-  echo "-r --release              Compile in release mode."
   echo
 }
 
@@ -46,24 +41,12 @@ for i in "$@"; do
       shift
       shift
       ;;
-    -a|--addons)
-      ADDONS=true
-      shift
-      ;;
     --debug)
       set -x
       shift
       ;;
     -n|--nobuild)
       RUN_BUILD=false
-      shift
-      ;;
-    -r|--release)
-      BUILD_TYPE="release"
-      shift
-      ;;
-    -s|--static)
-      STATIC_BUILD=true
       shift
       ;;
     -v|--version)
@@ -106,24 +89,13 @@ download_appimage_apprun() {
 }
 
 build_litexl() {
-  if [ -e build ]; then
-    rm -rf build
-  fi
-
   if [ -e ${BUILD_DIR} ]; then
     rm -rf ${BUILD_DIR}
   fi
 
   echo "Build lite-xl..."
-  sleep 1
-  if [[ $STATIC_BUILD == false ]]; then
-    meson setup --buildtype=$BUILD_TYPE --prefix=/usr ${BUILD_DIR}
-  else
-    meson setup --wrap-mode=forcefallback \
-      --buildtype=$BUILD_TYPE \
-      --prefix=/usr \
+  meson setup --wrap-mode=forcefallback --buildtype=release --prefix=/usr\
       ${BUILD_DIR}
-  fi
   meson compile -C ${BUILD_DIR}
 }
 
@@ -134,42 +106,13 @@ generate_appimage() {
 
   echo "Creating LiteXL.AppDir..."
 
-  DESTDIR="$(realpath LiteXL.AppDir)" meson install --skip-subprojects -C ${BUILD_DIR}
+  DESTDIR="$(realpath LiteXL.AppDir)" meson install -C ${BUILD_DIR}
   mv AppRun LiteXL.AppDir/
   # These could be symlinks but it seems they doesn't work with AppimageLauncher
   cp resources/icons/lite-xl.svg LiteXL.AppDir/
   cp resources/linux/com.lite_xl.LiteXL.desktop LiteXL.AppDir/
 
-  if [[ $ADDONS == true ]]; then
-    addons_download "${BUILD_DIR}"
-    addons_install "${BUILD_DIR}" "LiteXL.AppDir/usr/share/lite-xl"
-  fi
-
-  if [[ $STATIC_BUILD == false ]]; then
-    echo "Copying libraries..."
-
-    mkdir -p LiteXL.AppDir/usr/lib/
-
-    local allowed_libs=(
-      libfreetype
-      libpcre2
-      libSDL2
-      libsndio
-      liblua
-    )
-
-    while read line; do
-      local libname="$(echo $line | cut -d' ' -f1)"
-      local libpath="$(echo $line | cut -d' ' -f2)"
-      for lib in "${allowed_libs[@]}" ; do
-        if echo "$libname" | grep "$lib" > /dev/null ; then
-          cp "$libpath" LiteXL.AppDir/usr/lib/
-          continue 2
-        fi
-      done
-      echo "  Ignoring: $libname"
-    done < <(ldd build/src/lite-xl | awk '{print $1 " " $3}')
-  fi
+  welcome_install "${BUILD_DIR}" "LiteXL.AppDir/usr/share/lite-xl"
 
   echo "Generating AppImage..."
   local version=""
@@ -177,14 +120,10 @@ generate_appimage() {
     version="-$VERSION"
   fi
 
-  if [[ $ADDONS == true ]]; then
-    version="${version}-addons"
-  fi
-
   ./appimagetool --appimage-extract-and-run LiteXL.AppDir LiteXL${version}-${ARCH}.AppImage
 }
 
 setup_appimagetool
 download_appimage_apprun
-if [[ $RUN_BUILD == true ]]; then build_litexl; fi
+build_litexl
 generate_appimage $1

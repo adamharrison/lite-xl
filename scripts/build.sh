@@ -18,6 +18,7 @@ show_help() {
   echo "   --debug                    Debug this script."
   echo "-f --forcefallback            Force to build dependencies statically."
   echo "-h --help                     Show this help and exit."
+  echo "-d --debug-build              Builds a debug build."
   echo "-p --prefix PREFIX            Install directory prefix. Default: '/'."
   echo "-B --bundle                   Create an App bundle (macOS only)"
   echo "-P --portable                 Create a portable binary package."
@@ -25,7 +26,6 @@ show_help() {
   echo "-U --windows-lua-utf          Use the UTF8 patch for Lua."
   echo "                              macOS: disabled when used with --bundle,"
   echo "                              Windows: Implicit being the only option."
-  echo "-r --release                  Compile in release mode."
   echo "   --cross-platform PLATFORM  Cross compile for this platform."
   echo "                              The script will find the appropriate"
   echo "                              cross file in 'resources/cross'."
@@ -40,8 +40,8 @@ main() {
   local platform="$(get_platform_name)"
   local arch="$(get_platform_arch)"
   local build_dir="$(get_default_build_dir)"
-  local build_type="debug"
   local prefix=/
+  local build_type=release
   local force_fallback
   local bundle
   local portable
@@ -63,6 +63,10 @@ main() {
       -b|--builddir)
         build_dir="$2"
         shift
+        shift
+        ;;
+      -d|--debug-build)
+        build_type="debug"
         shift
         ;;
       --debug)
@@ -114,10 +118,6 @@ main() {
         cross="true"
         cross_file="$2"
         shift
-        shift
-        ;;
-      -r|--release)
-        build_type="release"
         shift
         ;;
       *)

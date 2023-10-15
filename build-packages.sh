@@ -194,7 +194,6 @@ main() {
     ${cross_platform_option[@]} \
     ${cross_arch_option[@]} \
     --binary \
-    --addons \
     $debug \
     $appimage \
     $dmg \
