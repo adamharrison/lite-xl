@@ -6,11 +6,10 @@ if [ ! -e "src/api/api.h" ]; then
   exit 1
 fi
 
-source scripts/common.sh
-
-BUILD_DIR="$(get_default_build_dir)"
-
-[[ ! -e $BUILD_DIR ]] && scripts/build.sh $@
+mkdir -p "Lite XL.app/Contents/MacOS" "Lite XL.app/Contents/Resources"
+cp $1/lite-xl/lite-xl "Lite XL.app/Contents/MacOS"
+cp $1/lite-xl/data/* "Lite XL.app/Contents/Resources"
+cp $1/lite-xl/Info.plist "Lite XL.app/Contents/Resources"
 
 cat > lite-xl-dmg.json << EOF
 {
@@ -33,4 +32,5 @@ cat > lite-xl-dmg.json << EOF
   ]
 }
 EOF
-~/node_modules/appdmg/bin/appdmg.js lite-xl-dmg.json "$(pwd)/$1.dmg"
+~/node_modules/appdmg/bin/appdmg.js lite-xl-dmg.json "$(pwd)/$2.dmg"
+rm -rf "Lite XL.app"

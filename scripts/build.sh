@@ -90,7 +90,7 @@ main() {
         shift
         ;;
       -B|--bundle)
-        if [[ "$platform" != "macos" ]]; then
+        if [[ "$platform" != "darwin" ]]; then
           echo "Warning: ignoring --bundle option, works only under macOS."
         else
           bundle="-Dbundle=true"
