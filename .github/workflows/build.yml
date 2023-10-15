@@ -1,11 +1,7 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - '*'
-    tags:
-      - v[0-9]+.*
+  push
   pull_request:
     branches:
       - '*'
