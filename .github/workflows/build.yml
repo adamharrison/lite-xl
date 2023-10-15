@@ -93,11 +93,12 @@ jobs:
       # - name: Install Dependencies
       #   run: bash scripts/install-dependencies.sh --debug
       - name: Build
-        run: scripts/build.sh --forcefallback --portable --addons
+        run: scripts/build.sh --forcefallback --portable --addons --debug
       - name: Package
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
           cd build-$ARCH-linux && tar -cvf ../$INSTALL_NAME.tar lite-xl && cd .. && gzip $INSTALL_NAME.tar
+          ls -l
           scripts/package-appimage.sh --debug --version ${{ needs.version.outputs.ref }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -138,9 +139,9 @@ jobs:
         run: |
           for ARCH in $ARCHES; do
             [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch $ARCH" >> "$GITHUB_ENV"
-            scripts/build.sh --portable --forcefallback --addons $CROSS
+            scripts/build.sh --addons --debug --forcefallback $CROSS --portable
             tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar -C build-$ARCH-darwin lite-xl && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
-            scripts/build.sh --bundle --forcefallback --addons $CROSS
+            scripts/build.sh --addons --debug --forcefallback $CROSS --bundle
           done
       - name: Create DMG Images
         run:
@@ -194,7 +195,7 @@ jobs:
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-x86-windows" >> "$GITHUB_ENV"
         fi
     - name: Build
-      run: scripts/build.sh -U --debug --forcefallback
+      run: scripts/build.sh --addons -U --debug --forcefallback
     - name: Package
       run: |
         cd build-x86_64-windows && zip ../$INSTALL_NAME.zip -r lite-xl && cd ..
