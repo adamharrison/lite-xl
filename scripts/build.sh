@@ -41,7 +41,7 @@ main() {
   local platform="$(get_platform_name)"
   local arch="$(get_platform_arch)"
   local build_dir="$(get_default_build_dir)"
-  local plugins="welcome"
+  local plugins="plugin_manager"
   local prefix=/
   local addons
   local build_type=release
