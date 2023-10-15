@@ -79,6 +79,10 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-$ARCH-linux" >> "$GITHUB_ENV"
+      - name: Install Clang
+        if: ${{ matrix.config.cc == 'clang' }}
+        run: |
+          apt-get update && apt-get install clang
       - uses: actions/checkout@v3
       # - name: Python Setup
       #   uses: actions/setup-python@v4
@@ -132,7 +136,7 @@ jobs:
         run: scripts/install-dependencies.sh --debug
       - name: Build
         run: |
-          for ARCH in ARCHES; do;
+          for ARCH in $ARCHES; do;
             [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch ${{ matrix.arch }}" >> "$GITHUB_ENV"
             scripts/build.sh --portable --forcefallback $CROSS --addons
             tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar -C build-$ARCH-darwin lite-xl && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
