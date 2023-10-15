@@ -97,7 +97,7 @@ jobs:
       - name: Package
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
-          pushd build-$ARCH-linux && tar -cvf ../$INSTALL_NAME.tar lite-xl && popd && gzip $INSTALL_NAME.tar
+          cd build-$ARCH-linux && tar -cvf ../$INSTALL_NAME.tar lite-xl && cd .. && gzip $INSTALL_NAME.tar
           scripts/package-appimage.sh --debug --version ${{ needs.version.outputs.ref }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3

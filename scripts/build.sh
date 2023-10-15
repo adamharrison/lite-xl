@@ -195,7 +195,7 @@ main() {
   fi
 
   CFLAGS=$CFLAGS LDFLAGS=$LDFLAGS meson setup \
-    --buildtype=$build_type \
+    --buildtype "$build_type" \
     --prefix "$prefix" \
     "${cross_file[@]}" \
     $force_fallback \
