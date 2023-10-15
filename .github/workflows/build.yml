@@ -49,9 +49,11 @@ jobs:
         id: check_release
         run: |
           export REF=`git describe --match v[0-9]* HEAD --tags`
+          echo "Build Version: $REF"
           [[ "$REF" != "" ]] && echo "ref=$REF" >> $GITHUB_OUTPUT
-          if [[ `git describe --exact-match --match v[0-9]* HEAD` ]]; then
+          if [[ `git describe --exact-match --match v[0-9]* HEAD --tags` ]]; then
             echo "release=$REF" >> $GITHUB_OUTPUT
+            echo "Release Version: $REF"
           fi
   build_linux:
     name: Linux
@@ -70,7 +72,6 @@ jobs:
     steps:
       - name: System Information
         run: |
-          system_profiler SPSoftwareDataType
           bash --version
           $CC -v
       - name: Set Environment Variables
@@ -78,7 +79,7 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-$ARCH-linux" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # - name: Python Setup
       #   uses: actions/setup-python@v4
       #   with:
@@ -122,7 +123,7 @@ jobs:
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_PREFIX=lite-xl-${{ needs.version.outputs.ref }}" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Python Setup
         uses: actions/setup-python@v4
         with:
@@ -166,7 +167,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: msys2/setup-msys2@v2
       with:
         msystem: ${{ matrix.config.msystem }}
@@ -207,10 +208,10 @@ jobs:
     strategy:
       matrix:
         arch:
-          - { target: x86, name: i686 }
+          # - { target: x86, name: i686 }
           - { target: x64, name: x86_64 }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch.target }}
@@ -245,7 +246,7 @@ jobs:
     container: ghcr.io/lite-xl/lite-xl-build-box:latest
     if: ${{ needs.version.outputs.release }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download Artfacts
         uses: actions/download-artifact@v3
         with:

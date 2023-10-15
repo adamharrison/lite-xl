@@ -50,7 +50,7 @@ main() {
         shift
         ;;
       -v|--version)
-        if [[ -n $2 ]]; then version="-$2"; fi
+        if [[ -n $2 ]]; then version="$2"; fi
         shift
         shift
         ;;
@@ -63,12 +63,6 @@ main() {
         ;;
     esac
   done
-
-  # show help if no valid argument was found
-  if [ $initial_arg_count -eq $# ]; then
-    show_help
-    exit 1
-  fi
 
   [[ ! -e $build_dir ]] && scripts/build.sh $@
 
