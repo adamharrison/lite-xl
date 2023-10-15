@@ -219,7 +219,7 @@ main() {
 
   if [[ $addons != "" ]]; then
     [[ ! -e "$build_dir/lpm" ]] && curl --insecure -L "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.$(get_platform_tuple)" -o $build_dir/lpm && chmod +x $build_dir/lpm
-    $build_dir/lpm install --datadir ${build_dir}/src/data --userdir ${build_dir}/src/data --arch $(get_platform_tuple) $plugins; $build_dir/lpm purge --datadir ${build_dir}/src/data --userdir ${build_dir}/src/data
+    $build_dir/lpm install --datadir ${build_dir}/src/data --userdir ${build_dir}/src/data --arch $(get_platform_tuple) $plugins --assume-yes; $build_dir/lpm purge --datadir ${build_dir}/src/data --userdir ${build_dir}/src/data
   fi
 
   mv "${build_dir}/src" "${build_dir}/lite-xl"
