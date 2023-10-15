@@ -98,7 +98,7 @@ jobs:
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
           tar -cvf $INSTALL_NAME.tar -C build-$ARCH-linux lite-xl && gzip $INSTALL_NAME.tar
-          scripts/appimage.sh --debug --version ${{ needs.version.outputs.ref }}
+          scripts/package-appimage.sh --debug --version ${{ needs.version.outputs.ref }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         if: ${{ matrix.config.cc == 'gcc' }}
@@ -137,7 +137,7 @@ jobs:
       - name: Build
         run: |
           for ARCH in $ARCHES; do
-            [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch ${{ matrix.arch }}" >> "$GITHUB_ENV"
+            [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch $ARCH" >> "$GITHUB_ENV"
             scripts/build.sh --portable --forcefallback $CROSS --addons
             tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar -C build-$ARCH-darwin lite-xl && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
             scripts/build.sh --bundle --forcefallback $CROSS --addons
