@@ -44,7 +44,7 @@ main() {
   local plugins="plugin_manager"
   local prefix=/
   local addons
-  local build_type=release
+  local build_type="release"
   local force_fallback
   local bundle
   local portable
