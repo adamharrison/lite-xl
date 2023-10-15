@@ -14,6 +14,14 @@ get_platform_name() {
   fi
 }
 
+get_executable_extension() {
+  if [[ "$OSTYPE" == "msys" ]]; then
+    echo ".exe"
+  else
+    echo ""
+  fi
+}
+
 get_platform_arch() {
   arch=${CROSS_ARCH:-$(uname -m)}
   if [[ $MSYSTEM != "" ]]; then
