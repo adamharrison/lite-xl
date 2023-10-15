@@ -10,7 +10,6 @@ source scripts/common.sh
 
 ARCH="$(uname -m)"
 BUILD_DIR="$(get_default_build_dir)"
-RUN_BUILD=true
 ADDONS=false
 
 show_help(){
@@ -45,10 +44,6 @@ for i in "$@"; do
       set -x
       shift
       ;;
-    -n|--nobuild)
-      RUN_BUILD=false
-      shift
-      ;;
     -v|--version)
       VERSION="$2"
       shift
@@ -59,12 +54,6 @@ for i in "$@"; do
       ;;
   esac
 done
-
-# show help if no valid argument was found
-if [ $initial_arg_count -eq $# ]; then
-  show_help
-  exit 1
-fi
 
 setup_appimagetool() {
   if [ ! -e appimagetool ]; then
@@ -88,17 +77,6 @@ download_appimage_apprun() {
   fi
 }
 
-build_litexl() {
-  if [ -e ${BUILD_DIR} ]; then
-    rm -rf ${BUILD_DIR}
-  fi
-
-  echo "Build lite-xl..."
-  meson setup --wrap-mode=forcefallback --buildtype=release --prefix=/usr\
-      ${BUILD_DIR}
-  meson compile -C ${BUILD_DIR}
-}
-
 generate_appimage() {
   if [ -e LiteXL.AppDir ]; then
     rm -rf LiteXL.AppDir
@@ -112,18 +90,17 @@ generate_appimage() {
   cp resources/icons/lite-xl.svg LiteXL.AppDir/
   cp resources/linux/com.lite_xl.LiteXL.desktop LiteXL.AppDir/
 
-  welcome_install "${BUILD_DIR}" "LiteXL.AppDir/usr/share/lite-xl"
-
   echo "Generating AppImage..."
   local version=""
   if [ -n "$VERSION" ]; then
     version="-$VERSION"
   fi
 
-  ./appimagetool --appimage-extract-and-run LiteXL.AppDir LiteXL${version}-${ARCH}.AppImage
+  ./appimagetool --appimage-extract-and-run LiteXL.AppDir LiteXL${version}-${ARCH}-linux.AppImage
+  rm -rf LiteXL.AppDir
 }
 
 setup_appimagetool
 download_appimage_apprun
-build_litexl
-generate_appimage $1
+[[ ! -e $BUILD_DIR ]] && scripts/build.sh $@
+generate_appimage

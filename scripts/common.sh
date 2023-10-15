@@ -2,14 +2,6 @@
 
 set -e
 
-welcome_install() {
-  local build_dir="$1"
-  local data_dir="$2"
-
-  [[ ! -e "$build_dir/lpm" ]] && curl --insecure -L "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.$(get_platform_tuple)" -o $build_dir/lpm && chmod +x $build_dir/lpm
-  $build_dir/lpm install --datadir $data_dir --userdir $data_dir --platform $(get_platform_tuple) install welcome && $build_dir/lpm purge --datadir $data_dir --userdir $data_dir
-}
-
 get_platform_name() {
   if [[ "$OSTYPE" == "msys" ]]; then
     echo "windows"

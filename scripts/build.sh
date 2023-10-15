@@ -21,6 +21,7 @@ show_help() {
   echo "-d --debug-build              Builds a debug build."
   echo "-p --prefix PREFIX            Install directory prefix. Default: '/'."
   echo "-B --bundle                   Create an App bundle (macOS only)"
+  echo "-A --addons                   Add in addons"
   echo "-P --portable                 Create a portable binary package."
   echo "-O --pgo                      Use profile guided optimizations (pgo)."
   echo "-U --windows-lua-utf          Use the UTF8 patch for Lua."
@@ -40,7 +41,9 @@ main() {
   local platform="$(get_platform_name)"
   local arch="$(get_platform_arch)"
   local build_dir="$(get_default_build_dir)"
+  local plugins="welcome"
   local prefix=/
+  local addons
   local build_type=release
   local force_fallback
   local bundle
@@ -80,6 +83,10 @@ main() {
       -p|--prefix)
         prefix="$2"
         shift
+        shift
+        ;;
+      -A|--addons)
+        addons="1"
         shift
         ;;
       -B|--bundle)
@@ -199,13 +206,23 @@ main() {
 
   meson compile -C "${build_dir}"
 
+  cp -r data "${build_dir}/src"
+
   if [[ $pgo != "" ]]; then
-    cp -r data "${build_dir}/src"
     "${build_dir}/src/lite-xl"
     meson configure -Db_pgo=use "${build_dir}"
     meson compile -C "${build_dir}"
     rm -fr "${build_dir}/data"
   fi
+
+  rm -fr "${build_dir}/src/lite-xl.p"
+
+  if [[ $addons != "" ]]; then
+    [[ ! -e "$build_dir/lpm" ]] && curl --insecure -L "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.$(get_platform_tuple)" -o $build_dir/lpm && chmod +x $build_dir/lpm
+    $build_dir/lpm install --datadir ${build_dir}/src/data --userdir ${build_dir}/src/data --arch $(get_platform_tuple) $plugins && $build_dir/lpm purge --datadir ${build_dir}/src/data --userdir ${build_dir}/src/data
+  fi
+
+  mv "${build_dir}/src" "${build_dir}/lite-xl"
 }
 
 main "$@"

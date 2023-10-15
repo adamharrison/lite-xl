@@ -10,7 +10,6 @@ on:
   push:
     tags:
       - v[0-9]+.*
-
   workflow_dispatch:
     inputs:
       version:
@@ -66,13 +65,14 @@ jobs:
     env:
       CC: ${{ matrix.config.cc }}
       CXX: ${{ matrix.config.cxx }}
+      ARCH: x86_64
     steps:
       - name: Set Environment Variables
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
           bash --version
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-x86_64-linux" >> "$GITHUB_ENV"
+          echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-$ARCH-linux" >> "$GITHUB_ENV"
       - uses: actions/checkout@v3
       # - name: Python Setup
       #   uses: actions/setup-python@v4
@@ -88,7 +88,7 @@ jobs:
         if: ${{ matrix.config.cc == 'gcc' }}
         run: |
           bash scripts/appimage.sh --debug --version ${{ needs.version.outputs.ref }}
-          tar -cvf $INSTALL_NAME.tar build-x86_64-linux/* && gzip $INSTALL_NAME.tar
+          tar -cvf $INSTALL_NAME.tar build-$ARCH-linux/* && gzip $INSTALL_NAME.tar
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         if: ${{ matrix.config.cc == 'gcc' }}
@@ -134,10 +134,10 @@ jobs:
           done
       - name: Create DMG Images
         run:
-          DMGS=""
+          export DMGS=""
           for ARCH in ARCHES; do;
             bash scripts/package-dmg.sh --version ${{ needs.version.outputs.ref }} --debug --dmg
-            DMGS="$DMGS $INSTALL_PREFIX-$ARCH-darwin"
+            export DMGS="$DMGS $INSTALL_PREFIX-$ARCH-darwin"
           done
           bash scripts/package-universal-dmg.sh $DMGS
       - name: Upload Mac Images
