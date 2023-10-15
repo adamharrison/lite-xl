@@ -164,7 +164,7 @@ main() {
     fi
     platform="${cross_platform:-$platform}"
     arch="${cross_arch:-$arch}"
-    cross_file=("--cross-file" "${cross_file:-resources/cross/$platform-$arch.txt}")
+    cross_file="--cross-file ${cross_file:-resources/cross/$platform-$arch.txt}"
     # reload build_dir because platform and arch might change
     build_dir="$(get_default_build_dir "$platform" "$arch")"
   fi
@@ -198,7 +198,7 @@ main() {
     "${build_dir}" \
     --buildtype "$build_type" \
     --prefix "$prefix" \
-    "${cross_file[@]}" \
+    $cross_file \
     $force_fallback \
     $bundle \
     $portable \
