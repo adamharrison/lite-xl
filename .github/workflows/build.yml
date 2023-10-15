@@ -34,13 +34,13 @@ jobs:
           [[ "${{ github.event.inputs.version }}" != "" ]]; then
             echo ::set-output name=version::${{ github.event.inputs.version }}
           fi
-      - name: Update Tag
-        uses: richardsimko/update-tag@v1
-        if: ${{ steps.tag.outputs.version }}
-        with:
-          tag_name: ${{ steps.tag.outputs.version }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Update Tag
+      #   uses: richardsimko/update-tag@v1
+      #   if: ${{ steps.tag.outputs.version }}
+      #   with:
+      #     tag_name: ${{ steps.tag.outputs.version }}
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
       - name: Check Release
         id: check_release
