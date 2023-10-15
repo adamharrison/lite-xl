@@ -31,7 +31,7 @@ jobs:
       - name: Fetch Version
         id: tag
         run: |
-          [[ "${{ github.event.inputs.version }}" != "" ]]; then
+          if [[ "${{ github.event.inputs.version }}" != "" ]]; then
             echo ::set-output name=version::${{ github.event.inputs.version }}
           fi
       # - name: Update Tag
