@@ -138,6 +138,8 @@ jobs:
         run: |
           for ARCH in $ARCHES; do
             [[ $(uname -m) != $ARCH ]] && echo "CROSS=--cross-arch $ARCH" >> "$GITHUB_ENV"
+            echo "Building $ARCH..."
+            echo scripts/build.sh --portable --forcefallback --addons $CROSS
             scripts/build.sh --portable --forcefallback --addons $CROSS
             tar -cvf $INSTALL_PREFIX-$ARCH-darwin.tar -C build-$ARCH-darwin lite-xl && gzip $INSTALL_PREFIX-$ARCH-darwin.tar
             scripts/build.sh --bundle --forcefallback --addons $CROSS

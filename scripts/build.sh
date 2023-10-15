@@ -215,7 +215,7 @@ main() {
     rm -fr "${build_dir}/data"
   fi
 
-  rm -fr "${build_dir}/src/lite-xl.p*"
+  rm -fr $build_dir/src/lite-xl.p*
 
   if [[ $addons != "" ]]; then
     [[ ! -e "$build_dir/lpm" ]] && curl --insecure -L "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.$(get_platform_tuple)" -o $build_dir/lpm && chmod +x $build_dir/lpm
