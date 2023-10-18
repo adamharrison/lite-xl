@@ -281,11 +281,19 @@ jobs:
             */*.exe
             */*.dmg
             */*.AppImage
+      - name: Update Tag
+        uses: richardsimko/update-tag@v1
+        # if: github.ref == 'refs/heads/master'
+        with:
+          tag_name: continuous
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Continuous Release
         uses: softprops/action-gh-release@v1
         # if: github.ref == 'refs/heads/master'
         with:
           name: Lite XL Continuous Release
+          tag_name: continuous
           prerelease: true
           files: |
             */*.tar.gz
