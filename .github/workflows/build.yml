@@ -117,6 +117,7 @@ jobs:
       CC: clang
       CXX: clang++
       ARCHES: x86_64 arm64
+      TYPES: portable bundle
     steps:
       - name: System Information
         run: |
@@ -140,7 +141,7 @@ jobs:
       - name: Build
         run: |
           for ARCH in $ARCHES; do
-            for TYPE in "portable bundle"; do
+            for TYPE in $TYPES; do
               if [[ $(uname -m) != $ARCH ]]; then
                 echo scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
                 scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
