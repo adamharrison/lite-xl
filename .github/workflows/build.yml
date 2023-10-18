@@ -149,7 +149,7 @@ jobs:
                 scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
               fi
             done
-            mkdir lite-xl-$TYPE
+            mkdir build-lite-xl-$TYPE
             cp -r build-lite-xl-x86_64-$TYPE/lite-xl build-lite-xl-$TYPE/lite-xl && rm build-lite-xl-$TYPE/lite-xl/lite-xl
             ls -l
             ls -l build-lite-xl-$TYPE
