@@ -219,7 +219,7 @@ main() {
     rm -fr "${build_dir}/data"
   fi
 
-  rm -fr $build_dir/src/lite-xl.*p build_dir/src/*.o
+  rm -fr $build_dir/src/lite-xl.*p $build_dir/src/*.o
 
   if [[ $addons != "" ]]; then
     [[ ! -e "$build_dir/lpm" ]] && curl --insecure -L "https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.$(get_platform_tuple)$(get_executable_extension)" -o "$build_dir/lpm$(get_executable_extension)" && chmod +x "$build_dir/lpm$(get_executable_extension)"

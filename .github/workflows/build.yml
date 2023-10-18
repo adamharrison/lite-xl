@@ -282,7 +282,8 @@ jobs:
             *.AppImage
 
   continuous:
-    name: Create Release
+    name: Create Continuous Release
+    # if: github.ref == 'refs/heads/master'
     needs: [version, build_windows_msys2, build_macos, build_linux]
     runs-on: ubuntu-latest
     container: ghcr.io/lite-xl/lite-xl-build-box:latest
@@ -299,8 +300,8 @@ jobs:
           name: Lite XL Continuous Release
           draft: true
           files: |
-            *.tar.gz
-            *.zip
-            *.exe
-            *.dmg
-            *.AppImage
+            */*.tar.gz
+            */*.zip
+            */*.exe
+            */*.dmg
+            */*.AppImage
