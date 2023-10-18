@@ -151,16 +151,12 @@ jobs:
             done
             mkdir build-lite-xl-$TYPE
             cp -r build-lite-xl-x86_64-$TYPE/lite-xl build-lite-xl-$TYPE/lite-xl && rm build-lite-xl-$TYPE/lite-xl/lite-xl
-            ls -l
-            ls -l build-lite-xl-$TYPE
-            ls -l build-lite-xl-$TYPE/lite-xl
-            echo lipo -create -output build-lite-xl-$TYPE/lite-xl/lite-xl build-lite-xl-x86_64-$TYPE/lite-xl/lite-xl build-lite-xl-aarch64-$TYPE/lite-xl/lite-xl
             lipo -create -output build-lite-xl-$TYPE/lite-xl/lite-xl build-lite-xl-x86_64-$TYPE/lite-xl/lite-xl build-lite-xl-aarch64-$TYPE/lite-xl/lite-xl
           done
           cp build-lite-xl-x86_64-bundle/Info.plist build-lite-xl-bundle/Info.plist
       - name: Package
         run: |
-          scripts/package-dmg.sh build-lite-xl-bundle lite-xl-macos.dmg
+          scripts/package-dmg.sh build-lite-xl-bundle lite-xl-macos
           cd build-lite-xl-portable && tar -cvf ../$INSTALL_PREFIX-macos.tar lite-xl && cd .. && gzip $INSTALL_PREFIX-macos.tar
       - name: Upload Mac Images
         uses: actions/upload-artifact@v3
@@ -215,7 +211,9 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: Windows Portable & Installer
-        path: ${{ env.INSTALL_NAME }}.zip
+        path: |
+          *.zip
+          *.exe
 
   # build_windows_msvc:
   #   name: Windows (MSVC)
