@@ -149,16 +149,19 @@ jobs:
                 scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
               fi
             done
-            cp -r build-lite-xl-x86_64-$TYPE/lite-xl lite-xl-$TYPE && rm lite-xl-$TYPE/lite-xl
+            mkdir lite-xl-$TYPE
+            cp -r build-lite-xl-x86_64-$TYPE/lite-xl build-lite-xl-$TYPE/lite-xl && rm build-lite-xl-$TYPE/lite-xl/lite-xl
             ls -l
-            ls -l lite-xl-$TYPE
-            echo lipo -create -output lite-xl-$TYPE/lite-xl build-lite-xl-*$TYPE/lite-xl/lite-xl
-            lipo -create -output lite-xl-$TYPE/lite-xl build-lite-xl-*$TYPE/lite-xl/lite-xl
+            ls -l build-lite-xl-$TYPE
+            ls -l build-lite-xl-$TYPE/lite-xl
+            echo lipo -create -output build-lite-xl-$TYPE/lite-xl/lite-xl build-lite-xl-x86_64-$TYPE/lite-xl/lite-xl build-lite-xl-aarch64-$TYPE/lite-xl/lite-xl
+            lipo -create -output build-lite-xl-$TYPE/lite-xl/lite-xl build-lite-xl-x86_64-$TYPE/lite-xl/lite-xl build-lite-xl-aarch64-$TYPE/lite-xl/lite-xl
           done
+          cp build-lite-xl-x86_64-bundle/Info.plist build-lite-xl-bundle/Info.plist
       - name: Package
         run:
-          scripts/package-dmg.sh lite-xl-bundle lite-xl-macos.dmg
-          tar -cvf $INSTALL_PREFIX-macos.tar -C lite-xl-portable lite-xl && gzip $INSTALL_PREFIX-macos.tar
+          scripts/package-dmg.sh build-lite-xl-bundle lite-xl-macos.dmg
+          cd lite-xl-portable && tar -cvf ../$INSTALL_PREFIX-macos.tar lite-xl && cd .. && gzip $INSTALL_PREFIX-macos.tar
       - name: Upload Mac Images
         uses: actions/upload-artifact@v3
         with:
