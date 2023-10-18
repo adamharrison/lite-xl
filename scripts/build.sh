@@ -166,10 +166,10 @@ main() {
     arch="${cross_arch:-$arch}"
     cross_file="--cross-file ${cross_file:-resources/cross/$platform-$arch.txt}"
     # reload build_dir because platform and arch might change
-    if [[ -n "$build_dir" ]]; then
+    if [[ "$build_dir" == "" ]]; then
       build_dir="$(get_default_build_dir "$platform" "$arch")"
     fi
-  elif [[ -n "$build_dir" ]]; then
+  elif [[ "$build_dir" == "" ]]; then
     build_dir="$(get_default_build_dir)"
   fi
 
@@ -185,7 +185,7 @@ main() {
     export CXXFLAGS="-mmacosx-version-min=$macos_version_min"
     export LDFLAGS="-mmacosx-version-min=$macos_version_min"
   fi
-
+  
   rm -rf "${build_dir}"
 
   if [[ $patch_lua == "true" ]] && [[ ! -z $force_fallback ]]; then
