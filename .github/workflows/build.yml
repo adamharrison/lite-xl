@@ -275,11 +275,11 @@ jobs:
           body_path: changelog.md
           generate_release_notes: true
           files: |
-            *.tar.gz
-            *.zip
-            *.exe
-            *.dmg
-            *.AppImage
+            */*.tar.gz
+            */*.zip
+            */*.exe
+            */*.dmg
+            */*.AppImage
 
   continuous:
     name: Create Continuous Release
@@ -296,9 +296,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: continuous
           name: Lite XL Continuous Release
-          draft: true
+          prerelease: true
           files: |
             */*.tar.gz
             */*.zip
