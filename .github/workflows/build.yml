@@ -116,7 +116,7 @@ jobs:
     env:
       CC: clang
       CXX: clang++
-      ARCHES: x86_64 arm64
+      ARCHES: x86_64 aarch64
       TYPES: portable bundle
     steps:
       - name: System Information
@@ -140,13 +140,11 @@ jobs:
         run: scripts/install-dependencies.sh --debug
       - name: Build
         run: |
-          for ARCH in $ARCHES; do
-            for TYPE in $TYPES; do
+          for TYPE in $TYPES; do
+            for ARCH in $ARCHES; do
               if [[ $(uname -m) != $ARCH ]]; then
-                echo scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
                 scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
               else
-                echo scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
                 scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
               fi
             done
