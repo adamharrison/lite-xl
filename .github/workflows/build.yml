@@ -266,8 +266,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           path: .
-      - name: Create Release
+      - name: Versioned Release
         uses: softprops/action-gh-release@v1
+        if: ${{ needs.version.outputs.release }}
         with:
           tag_name: ${{ needs.version.outputs.release }}
           name: Lite XL ${{ needs.version.outputs.release }}
@@ -280,21 +281,9 @@ jobs:
             */*.exe
             */*.dmg
             */*.AppImage
-
-  continuous:
-    name: Create Continuous Release
-    # if: github.ref == 'refs/heads/master'
-    needs: [version, build_windows_msys2, build_macos, build_linux]
-    runs-on: ubuntu-latest
-    container: ghcr.io/lite-xl/lite-xl-build-box:latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Download Artfacts
-        uses: actions/download-artifact@v3
-        with:
-          path: .
-      - name: Create Release
+      - name: Continuous Release
         uses: softprops/action-gh-release@v1
+        # if: github.ref == 'refs/heads/master'
         with:
           name: Lite XL Continuous Release
           prerelease: true
