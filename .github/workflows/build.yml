@@ -142,8 +142,10 @@ jobs:
           for ARCH in $ARCHES; do
             for TYPE in "portable bundle"; do
               if [[ $(uname -m) != $ARCH ]]; then
+                echo scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
                 scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
               else
+                echo scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
                 scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
               fi
             done
