@@ -156,7 +156,7 @@ jobs:
           cp build-lite-xl-x86_64-bundle/Info.plist build-lite-xl-bundle/Info.plist
       - name: Package
         run: |
-          scripts/package-dmg.sh build-lite-xl-bundle lite-xl-macos
+          scripts/package-dmg.sh build-lite-xl-bundle $INSTALL_PREFIX-macos
           cd build-lite-xl-portable && tar -cvf ../$INSTALL_PREFIX-macos.tar lite-xl && cd .. && gzip $INSTALL_PREFIX-macos.tar
       - name: Upload Mac Images
         uses: actions/upload-artifact@v3
