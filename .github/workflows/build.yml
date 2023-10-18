@@ -141,6 +141,7 @@ jobs:
       - name: Build
         run: |
           for TYPE in $TYPES; do
+            echo "Building $TYPE..."
             for ARCH in $ARCHES; do
               if [[ $(uname -m) != $ARCH ]]; then
                 scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
@@ -148,10 +149,9 @@ jobs:
                 scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
               fi
             done
-            cp -r build-lite-xl-${ARCHES%% *}-$TYPE/lite-xl lite-xl-$TYPE && rm lite-xl-$TYPE/lite-xl
+            cp -r build-lite-xl-x86_64-$TYPE/lite-xl lite-xl-$TYPE && rm lite-xl-$TYPE/lite-xl
             ls -l
-            ls -l build-lite-xl-portable
-            ls -l build-lite-xl-bundle
+            ls -l lite-xl-$TYPE
             echo lipo -create -output lite-xl-$TYPE/lite-xl build-lite-xl-*$TYPE/lite-xl
             lipo -create -output lite-xl-$TYPE/lite-xl build-lite-xl-*$TYPE/lite-xl
           done
