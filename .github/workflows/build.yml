@@ -145,7 +145,7 @@ jobs:
                 scripts/build.sh --addons --debug --forcefallback --cross-arch $ARCH --$TYPE -b build-lite-xl-$ARCH-$TYPE
               else
                 scripts/build.sh --addons --debug --forcefallback --$TYPE -b build-lite-xl-$ARCH-$TYPE
-              end
+              fi
             done
             cp -r build-lite-xl-${ARCHES%% *}-$TYPE/lite-xl lite-xl-$TYPE && rm lite-xl-$TYPE/lite-xl
             lipo -create -output lite-xl-$TYPE/lite-xl build-lite-xl-*$TYPE/lite-xl
