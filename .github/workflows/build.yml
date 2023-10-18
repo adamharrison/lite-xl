@@ -159,9 +159,9 @@ jobs:
           done
           cp build-lite-xl-x86_64-bundle/Info.plist build-lite-xl-bundle/Info.plist
       - name: Package
-        run:
+        run: |
           scripts/package-dmg.sh build-lite-xl-bundle lite-xl-macos.dmg
-          cd lite-xl-portable && tar -cvf ../$INSTALL_PREFIX-macos.tar lite-xl && cd .. && gzip $INSTALL_PREFIX-macos.tar
+          cd build-lite-xl-portable && tar -cvf ../$INSTALL_PREFIX-macos.tar lite-xl && cd .. && gzip $INSTALL_PREFIX-macos.tar
       - name: Upload Mac Images
         uses: actions/upload-artifact@v3
         with:
@@ -217,43 +217,43 @@ jobs:
         name: Windows Portable & Installer
         path: ${{ env.INSTALL_NAME }}.zip
 
-  build_windows_msvc:
-    name: Windows (MSVC)
-    needs: [version]
-    runs-on: windows-2019
-    strategy:
-      matrix:
-        arch:
-          # - { target: x86, name: i686 }
-          - { target: x64, name: x86_64 }
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: ${{ matrix.arch.target }}
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-      - name: Install meson and ninja
-        run: pip install meson ninja
-      - name: Set up environment variables
-        run: |
-          "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-windows-msvc-${{ matrix.arch.name }}" >> $env:GITHUB_ENV
-          "LUA_SUBPROJECT_PATH=subprojects/lua-5.4.4" >> $env:GITHUB_ENV
-      - name: Configure
-        run: |
-          # Download the subprojects first so we can patch it before configuring.
-          # This avoids reconfiguring the subprojects when compiling.
-          meson subprojects download
-          Get-Content -Path resources/windows/001-lua-unicode.diff -Raw | patch -d $env:LUA_SUBPROJECT_PATH -p1 --forward
-          meson setup --wrap-mode=forcefallback build
-      - name: Build
-        run: |
-          meson install -C build --destdir="../lite-xl"
-      - name: Package
-        run: |
-          Remove-Item -Recurse -Force -Path "lite-xl/lib","lite-xl/include"
-          Compress-Archive -Path lite-xl -DestinationPath "$env:INSTALL_NAME.zip"
+  # build_windows_msvc:
+  #   name: Windows (MSVC)
+  #   needs: [version]
+  #   runs-on: windows-2019
+  #   strategy:
+  #     matrix:
+  #       arch:
+  #         # - { target: x86, name: i686 }
+  #         - { target: x64, name: x86_64 }
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: ilammy/msvc-dev-cmd@v1
+  #       with:
+  #         arch: ${{ matrix.arch.target }}
+  #     - uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.x'
+  #     - name: Install meson and ninja
+  #       run: pip install meson ninja
+  #     - name: Set up environment variables
+  #       run: |
+  #         "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-windows-msvc-${{ matrix.arch.name }}" >> $env:GITHUB_ENV
+  #         "LUA_SUBPROJECT_PATH=subprojects/lua-5.4.4" >> $env:GITHUB_ENV
+  #     - name: Configure
+  #       run: |
+  #         # Download the subprojects first so we can patch it before configuring.
+  #         # This avoids reconfiguring the subprojects when compiling.
+  #         meson subprojects download
+  #         Get-Content -Path resources/windows/001-lua-unicode.diff -Raw | patch -d $env:LUA_SUBPROJECT_PATH -p1 --forward
+  #         meson setup --wrap-mode=forcefallback build
+  #     - name: Build
+  #       run: |
+  #         meson install -C build --destdir="../lite-xl"
+  #     - name: Package
+  #       run: |
+  #         Remove-Item -Recurse -Force -Path "lite-xl/lib","lite-xl/include"
+  #         Compress-Archive -Path lite-xl -DestinationPath "$env:INSTALL_NAME.zip"
 
   release:
     name: Create Release
