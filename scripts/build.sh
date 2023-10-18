@@ -40,7 +40,7 @@ show_help() {
 main() {
   local platform="$(get_platform_name)"
   local arch="$(get_platform_arch)"
-  local build_dir="$(get_default_build_dir)"
+  local build_dir
   local plugins="plugin_manager"
   local prefix=/
   local addons
@@ -166,7 +166,11 @@ main() {
     arch="${cross_arch:-$arch}"
     cross_file="--cross-file ${cross_file:-resources/cross/$platform-$arch.txt}"
     # reload build_dir because platform and arch might change
-    build_dir="$(get_default_build_dir "$platform" "$arch")"
+    if [[ -n "$build_dir" ]]; then
+      build_dir="$(get_default_build_dir "$platform" "$arch")"
+    fi
+  elif [[ -n "$build_dir" ]]; then
+    build_dir="$(get_default_build_dir)"
   fi
 
   # arch and platform specific stuff
