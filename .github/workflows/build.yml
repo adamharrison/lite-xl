@@ -258,7 +258,6 @@ jobs:
     name: Create Release
     needs: [version, build_windows_msys2, build_macos, build_linux]
     runs-on: ubuntu-latest
-    container: ghcr.io/lite-xl/lite-xl-build-box:latest
     steps:
       - uses: actions/checkout@v3
       - name: Download Artfacts
