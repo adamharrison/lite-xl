@@ -19,6 +19,9 @@ on:
 # * Mac Universal DMG
 # * Windows x86_64 Portable
 # * Windows x86_64 Installer
+
+# * Windows x86 Portable
+# * Windows x86 Installer
 jobs:
   # Checks to see if we have an input, and stamps that onto the repo.
   # Determines if this is a release, and determines the official ref.
@@ -34,13 +37,13 @@ jobs:
           if [[ "${{ github.event.inputs.version }}" != "" ]]; then
             echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
           fi
-      # - name: Update Tag
-      #   uses: richardsimko/update-tag@v1
-      #   if: ${{ steps.tag.outputs.version }}
-      #   with:
-      #     tag_name: ${{ steps.tag.outputs.version }}
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update Tag
+        uses: richardsimko/update-tag@v1
+        if: ${{ steps.tag.outputs.version }}
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -70,35 +73,20 @@ jobs:
       CXX: ${{ matrix.config.cxx }}
       ARCH: x86_64
     steps:
-      - name: Install Clang
-        if: ${{ matrix.config.cc == 'clang' }}
-        run: |
-          apt-get update && apt-get install clang
       - name: System Information
         run: |
           bash --version
           $CC -v
       - name: Set Environment Variables
-        if: ${{ matrix.config.cc == 'gcc' }}
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-$ARCH-linux" >> "$GITHUB_ENV"
       - uses: actions/checkout@v3
-      # - name: Python Setup
-      #   uses: actions/setup-python@v4
-      #   with:
-      #     python-version: 3.9
-      # - name: Update Packages
-      #   run: sudo apt-get update
-      # - name: Install Dependencies
-      #   run: bash scripts/install-dependencies.sh --debug
       - name: Build
         run: scripts/build.sh --forcefallback --portable --addons --debug
       - name: Package
-        if: ${{ matrix.config.cc == 'gcc' }}
         run: |
           cd build-$ARCH-linux && tar -cvf ../$INSTALL_NAME.tar lite-xl && cd .. && gzip $INSTALL_NAME.tar
-          ls -l
           scripts/package-appimage.sh --debug --version ${{ needs.version.outputs.ref }}
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
@@ -173,7 +161,7 @@ jobs:
     strategy:
       matrix:
         config:
-          # - {msystem: MINGW32, arch: i686}
+          - {msystem: MINGW32, arch: i686}
           - {msystem: MINGW64, arch: x86_64}
     defaults:
       run:
@@ -208,6 +196,7 @@ jobs:
         cd build-x86_64-windows && zip ../$INSTALL_NAME.zip -r lite-xl && cd ..
         scripts/package-innosetup.sh --debug --version ${{ needs.version.outputs.ref }}
     - name: Upload Artifacts
+      if: ${{ matrix.config.arch == 'x86_64' }}
       uses: actions/upload-artifact@v3
       with:
         name: Windows Portable & Installer
@@ -223,7 +212,7 @@ jobs:
     strategy:
       matrix:
         arch:
-          # - { target: x86, name: i686 }
+          - { target: x86, name: i686 }
           - { target: x64, name: x86_64 }
     steps:
       - uses: actions/checkout@v3
