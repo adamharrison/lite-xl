@@ -186,11 +186,12 @@ jobs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
         if [[ "${MSYSTEM}" == "MINGW64" ]]; then
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-x86_64-windows" >> "$GITHUB_ENV"
+          echo "ADDONS=--addons" >> "$GITHUB_ENV"
         else
           echo "INSTALL_NAME=lite-xl-${{ needs.version.outputs.ref }}-x86-windows" >> "$GITHUB_ENV"
         fi
     - name: Build
-      run: scripts/build.sh --addons -U --debug --forcefallback
+      run: scripts/build.sh $ADDONS -U --debug --forcefallback
     - name: Package
       run: |
         cd build-x86_64-windows && zip ../$INSTALL_NAME.zip -r lite-xl && cd ..
