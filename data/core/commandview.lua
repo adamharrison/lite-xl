@@ -111,7 +111,7 @@ end
 function CommandView:set_text(text, select)
   self.last_text = text
   self.doc:remove(1, 1, math.huge, math.huge)
-  self.doc:text_input(text)
+  self:text_input(text)
   if select then
     self.doc:set_selection(math.huge, math.huge, 1, 1)
   end
@@ -301,7 +301,7 @@ function CommandView:update()
       if #self.last_text < #current_text and
          string.find(suggested_text, current_text, 1, true) == 1 then
         self:set_text(suggested_text)
-        self.doc:set_selection(1, #current_text + 1, 1, math.huge)
+        self:set_selection(1, #current_text + 1, 1, math.huge)
       end
       self.last_text = current_text
     end
