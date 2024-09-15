@@ -23,10 +23,6 @@ jobs:
         id: tag
         run: |
           echo "version=3.0" >> $GITHUB_OUTPUT
-      - name: Generate Release Notes
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/generate-release-notes.sh --debug --version ${{ steps.tag.outputs.version }}
 
       - name: Create Release
         id: create_release
@@ -35,7 +31,6 @@ jobs:
           name: Lite XL ${{ steps.tag.outputs.version }}
           tag: ${{ steps.tag.outputs.version }}
           draft: true
-          bodyFile: release-notes.md
           allowUpdates: true
 
   build_linux:
