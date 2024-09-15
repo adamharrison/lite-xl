@@ -2,15 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - v[0-9]+.*
-
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Release Version
-        default: v2.1.5
-        required: true
+    branches:
+      - "3.0"
 
 jobs:
   release:
@@ -29,19 +22,7 @@ jobs:
       - name: Fetch Version
         id: tag
         run: |
-          if [[ "${{ github.event.inputs.version }}" != "" ]]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Update Tag
-        uses: richardsimko/update-tag@v1
-        with:
-          tag_name: ${{ steps.tag.outputs.version }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          echo "version=3.0" >> $GITHUB_OUTPUT
       - name: Generate Release Notes
         env:
           GH_TOKEN: ${{ github.token }}
