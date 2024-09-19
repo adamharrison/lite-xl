@@ -30,7 +30,7 @@ jobs:
         with:
           name: Lite XL ${{ steps.tag.outputs.version }}
           tag: ${{ steps.tag.outputs.version }}
-          draft: true
+          prerelease: true
           allowUpdates: true
 
   build_linux:
