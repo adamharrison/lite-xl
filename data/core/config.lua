@@ -258,7 +258,7 @@ config.max_clicks = 3
 ---
 ---Defaults to false.
 ---@type boolean
-config.skip_plugins_version = false
+config.skip_plugins_version = true
 
 ---Increases the performance of the editor and its user.
 ---Do not change this unless you know what you are doing.
