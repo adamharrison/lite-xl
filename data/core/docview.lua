@@ -132,6 +132,14 @@ function DocView:get_line_screen_position(line, col)
   end
 end
 
+-- compatibility function
+function DocView:get_col_x_offset(line, col) 
+  local gw = self:get_gutter_width()
+  local x, y = self:get_line_screen_position(line, col)
+  local ox = self:get_content_offset()
+  return x - gw - ox
+end
+
 
 function DocView:resolve_screen_position(x, y)
   local ox, oy = self:get_virtual_line_offset(1)
