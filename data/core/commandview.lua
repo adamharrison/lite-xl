@@ -113,7 +113,7 @@ function CommandView:set_text(text, select)
   self.doc:remove(1, 1, math.huge, math.huge)
   self:text_input(text)
   if select then
-    self.doc:set_selection(math.huge, math.huge, 1, 1)
+    self:set_selection(math.huge, math.huge, 1, 1)
   end
 end
 

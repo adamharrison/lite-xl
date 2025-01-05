@@ -422,7 +422,7 @@ function DocView:ime_text_editing(text, start, length, idx)
     if line1 ~= line2 or col1 ~= col2 then
       self:delete_to_cursor(sidx)
     end
-    self:insert(line1, col1, text)
+    self.doc:insert(line1, col1, text)
     self:set_selections(sidx, line1, col1 + #text, line1, col1)
   end
 end
@@ -737,7 +737,7 @@ function DocView:on_text_input(text)
 end
 
 function DocView:on_ime_text_editing(text, start, length)
-  self.doc:ime_text_editing(text, start, length)
+  self:ime_text_editing(text, start, length)
   self.ime_status = #text > 0
   self.ime_selection.from = start
   self.ime_selection.size = length

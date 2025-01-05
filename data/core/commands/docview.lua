@@ -102,7 +102,7 @@ end
 local function insert_paste(dv, value, whole_line, idx)
   if whole_line then
     local line1, col1 = dv:get_selection_idx(idx)
-    dv:insert(line1, 1, value:gsub("\r", "").."\n")
+    dv.doc:insert(line1, 1, value:gsub("\r", "").."\n")
     -- Because we're inserting at the start of the line,
     -- if the cursor is in the middle of the line
     -- it gets carried to the next line along with the old text.
