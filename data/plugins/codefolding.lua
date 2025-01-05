@@ -7,14 +7,20 @@ local DocView = require "core.docview"
 local Node = require "core.node"
 local common = require "core.common"
 
+local c_likes = { "{", "}" }
+
 config.plugins.codefolding = common.merge({
   debug = false,
   blocks = {
-    ["*"] = { "{", "}" }
+    ["C"] = c_likes,
+    ["C++"] = c_likes,
+    ["JavaScript"] = c_likes,
+    ["*"] = nil
   }
 }, config.plugins.codefolding);
+
 function DocView:get_folding_blocks()
-  return self.syntax and config.plugins.codefolding.blocks[self.syntax.name] or config.plugins.codefolding.blocks["*"]
+  return self.doc and self.doc.syntax and config.plugins.codefolding.blocks[self.doc.syntax.name] or config.plugins.codefolding.blocks["*"]
 end
 
 function DocView:is_folded(doc_line)
@@ -33,6 +39,7 @@ end
 
 function DocView:compute_fold(doc_line)
   local blocks = self:get_folding_blocks()
+  if not blocks then return end
   local start_of_computation = doc_line
   for i = doc_line - 1, 1, -1 do
     if self.foldable[i] then break end
@@ -44,11 +51,11 @@ function DocView:compute_fold(doc_line)
       if self.doc.lines[i-1]:find(blocks[1] .. "%s*$") then
         origin = i - 1
       elseif self.doc.lines[i-1]:find(blocks[2] .. "%s*$") then
-        origin = self.foldable[self.foldable[i - 1]]
-        if self.doc.lines[self.foldable[i - 1]]:find("^%s*" .. blocks[2]) then
-          origin = self.foldable[self.foldable[self.foldable[i - 1]]]
+        origin = self.foldable[self.foldable[i - 1]] or 0
+        if self.doc.lines[self.foldable[i - 1]] and self.doc.lines[self.foldable[i - 1]]:find("^%s*" .. blocks[2]) then
+          origin = self.foldable[self.foldable[self.foldable[i - 1]]] or 0
         else
-          origin = self.foldable[self.foldable[i - 1]]
+          origin = self.foldable[self.foldable[i - 1]] or 0 
         end
       end
       self.foldable[i] = origin
@@ -63,7 +70,7 @@ local old_tokenize = DocView.tokenize
 function DocView:tokenize(line)
   local blocks = self:get_folding_blocks()
   local tokens = old_tokenize(self, line)
-  if not self.foldable then return tokens end
+  if not self.foldable or not blocks then return tokens end
   self:compute_fold(line)
   if self.folded[line] then return {} end
   if self:is_foldable(line) and self.folded[line+1] then
@@ -85,7 +92,7 @@ function DocView:tokenize(line)
 end
 
 function DocView:is_foldable(line)
-  if line < #self.doc.lines then
+  if line < #self.doc.lines - 1 then
     if not self.foldable[line] or not self.foldable[line+1] then self:compute_fold(line+1) end
     return self.foldable[line] and self.foldable[line+1] > self.foldable[line]
   end
