@@ -110,7 +110,7 @@ function DocView:tokenize(line)
           table.insert(colorized, doc_line)
           table.insert(colorized, math.max(start_offset, offset))
           table.insert(colorized, math.min(end_offset, offset + #text - 1))
-          table.insert(colorized, common.merge(token_style, { color = style.syntax[type], font = style.syntax_fonts[type] }))
+          table.insert(colorized, common.merge(token_style, { color = style.syntax[type], font = style.syntax_fonts[type], type = type }))
         end
         if offset > end_offset then break end
         offset = offset + #text

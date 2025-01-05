@@ -93,12 +93,10 @@ function DocView:get_virtual_line_offset(vline)
   return x + gw, y + lh * (vline - 1)
 end
 
-function DocView:get_line_screen_position(line, col)
-  local x, y = self:get_content_offset()
+function DocView:get_line_position(line, col)
   local lh = self:get_line_height()
-  local gw = self:get_gutter_width()
   local vline, vcol = self:get_closest_vline(line, col)
-  y = y + (vline-1) * lh
+  local y = (vline-1) * lh
   if col and self:get_vline_line(vline) == line then
     local default_font = self:get_font()
     local _, indent_size = self.doc:get_indent_info()
@@ -116,7 +114,7 @@ function DocView:get_line_screen_position(line, col)
         else
           for char in common.utf8_chars(text) do
             if column >= vcol then
-              return x + gw + xoffset, y
+              return xoffset, y
             end
             xoffset = xoffset + font:get_width(char)
             column = column + 1
@@ -126,19 +124,21 @@ function DocView:get_line_screen_position(line, col)
         xoffset = xoffset + font:get_width(text)
       end
     end
-    return x + gw + xoffset, y
+    return xoffset, y
   else
-    return x + gw, y
+    return 0, y
   end
 end
 
--- compatibility function
-function DocView:get_col_x_offset(line, col) 
+function DocView:get_line_screen_position(line, col)
+  local ox, oy = self:get_content_offset()
   local gw = self:get_gutter_width()
-  local x, y = self:get_line_screen_position(line, col)
-  local ox = self:get_content_offset()
-  return x - gw - ox
+  local x, y = self:get_line_position(line, col)
+  return x + ox + gw, oy + y
 end
+
+-- compatibility function
+DocView.get_col_x_offset = DocView.get_line_position
 
 
 function DocView:resolve_screen_position(x, y)
