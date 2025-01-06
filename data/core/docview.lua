@@ -996,6 +996,7 @@ end
 -- `{ "doc", line, 1, #self.doc.lines[line], style }`
 -- `{ "virtual", line, text, false, style }
 function DocView:tokenize(line)
+  if line > #self.doc.lines then return {} end
   return { "doc", line, 1, #self.doc.lines[line], { } }
 end
 
