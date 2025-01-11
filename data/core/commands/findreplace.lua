@@ -116,7 +116,7 @@ local function replace(kind, default, fn)
         submit = function(new)
           core.status_view:remove_tooltip()
           insert_unique(core.previous_replace, new)
-          local results = doc():replace(function(text)
+          local results = dv():replace(function(text)
             return fn(text, old, new)
           end)
           local n = 0
