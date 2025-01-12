@@ -226,7 +226,7 @@ local write_commands = {
       if line1 == line2 and col1 == col2 then
         local text = dv.doc:get_text(line1, 1, line1, col1)
         if #text >= indent_size and text:find("^ *$") then
-          dv.doc:delete_to_cursor(idx, 0, -indent_size)
+          dv:delete_to_cursor(idx, 0, -indent_size)
           goto continue
         end
       end
