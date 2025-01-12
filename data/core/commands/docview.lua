@@ -93,7 +93,7 @@ local function set_cursor(dv, x, y, snap_type)
   local line, col = dv:resolve_screen_position(x, y)
   dv:set_selection(line, col, line, col)
   if snap_type == "word" or snap_type == "lines" then
-    command.perform("doc:select-" .. snap_type)
+    command.perform("docview:select-" .. snap_type)
   end
   dv.mouse_selecting = { line, col, snap_type }
   core.blink_reset()
@@ -404,9 +404,9 @@ local read_commands = {
   end,
 
   ["docview:select-word"] = function(dv)
-    for idx, line1, col1 in dv:get_selections(true) do
-      local line1, col1 = translate.start_of_word(dv, line1, col1)
-      local line2, col2 = translate.end_of_word(dv, line1, col1)
+    for idx, line, col in dv:get_selections(true) do
+      local line1, col1 = translate.start_of_word(dv, line, col)
+      local line2, col2 = translate.end_of_word(dv, line, col)
       dv:set_selections(idx, line2, col2, line1, col1)
     end
   end,
