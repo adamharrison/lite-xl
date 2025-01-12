@@ -56,14 +56,19 @@ function Highlighter:start(first_invalid_line, max_wanted_line)
   self.running = self.running or core.add_thread(function()
     while self.first_invalid_line <= self.max_wanted_line do
       local max = math.min(self.first_invalid_line + config.plugins.highlighter.lines_per_step, self.max_wanted_line)
+      local first_changed_line, last_changed_line
       for i = self.first_invalid_line, max do
         local state = (i > 1) and self.lines[i - 1].state
         local line = self.lines[i]
         if not (line and line.init_state == state and line.text == self.doc.lines[i]) then
+          first_changed_line = first_changed_line or i
+          last_changed_line = i
           self.lines[i] = self:tokenize_line(i, state)
         end
       end
-      for view in pairs(self.views) do view:invalidate_cache(self.first_invalid_line, max) end
+      if last_changed_line then
+        for view in pairs(self.views) do view:invalidate_cache(first_changed_line, last_changed_line) end
+      end
       self.first_invalid_line = max + 1
       core.redraw = true
       coroutine.yield(0)
