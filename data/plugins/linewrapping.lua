@@ -73,7 +73,7 @@ local function split_token(font, text, mode, width)
   local last_break = nil
   for i = 1, #text do
     offset = offset + font:get_width(text:sub(i, i))
-    if offset >= width then return last_break end
+    if offset >= width then return last_break or (i - 1) end
     if mode == "word" or text:sub(i, i) == " " then last_break = i end
   end
   return nil
@@ -82,6 +82,7 @@ end
 local old_draw = DocView.draw
 function DocView:draw()
   old_draw(self)
+  local new_width = self.size.x
   if self.wrapping and config.plugins.linewrapping.guide and config.plugins.linewrapping.width_override then
     local width = config.plugins.linewrapping.width_override
     if type(width) == "function" then width = width(self) end
@@ -89,7 +90,10 @@ function DocView:draw()
     local x, y = docview:get_content_offset()
     local gw = docview:get_gutter_width()
     renderer.draw_rect(x + gw + width, y, 1, core.root_view.size.y, style.selection)
+    new_width = width
   end
+  if self.wrapping_width and self.wrapping_width ~= new_width then self:invalidate_cache() end
+  self.wrapping_width = new_width
 end
 
 local old_tokenize = DocView.tokenize
@@ -121,7 +125,7 @@ function DocView:tokenize(line)
         if type == "doc" then
           table.insert(tokens, s)
           table.insert(tokens, i and (i - 1) or e)
-          s = i
+          s = i + s
         else
           table.insert(tokens, i and l:sub(1, i) or l)
           table.insert(tokens, false)
