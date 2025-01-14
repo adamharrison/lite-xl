@@ -195,7 +195,7 @@ command.add(DocView, {
       end
     end
   end,
-  ["codefolding-unfold-all"] = function(dv)
+  ["codefolding:unfold-all"] = function(dv)
     dv:compute_fold(#dv.doc.lines)
     for i = #dv.doc.lines, 1, -1 do
       if dv:is_foldable(i) == 0 then 
@@ -210,6 +210,5 @@ keymap.add {
   ["ctrl+alt+]"] = "codefolding:unfold",
   ["ctrl+alt+\\"] = "codefolding:toggle",
   ["ctrl+alt+-"] = "codefolding:fold-all",
-  -- huh; you can't bind ctrl+alt+=
   ["ctrl+alt+="] = "codefolding:unfold-all"
 } 
