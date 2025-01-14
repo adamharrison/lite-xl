@@ -6,6 +6,8 @@ local Doc = require "core.doc"
 local DocView = require "core.docview"
 local Node = require "core.node"
 local common = require "core.common"
+local command = require "core.command"
+local keymap = require "core.keymap"
 
 local c_likes = { "{", "}" }
 
@@ -94,7 +96,7 @@ end
 function DocView:is_foldable(line)
   if line < #self.doc.lines - 1 then
     if not self.foldable[line] or not self.foldable[line+1] then self:compute_fold(line+1) end
-    return self.foldable[line] and self.foldable[line+1] > self.foldable[line]
+    return self.foldable[line] and self.foldable[line+1] > self.foldable[line] and self.foldable[line]
   end
   return false
 end
@@ -102,19 +104,22 @@ end
 function DocView:toggle_fold(start_doc_line, value)
   local blocks = self:get_folding_blocks()
   if self:is_foldable(start_doc_line) then
-    if value == nil then value = not self:is_folded(start_doc_line) end
-    local starting_fold = self.foldable[start_doc_line]
-    local end_doc_line = start_doc_line + 1
-    while end_doc_line <= #self.doc.lines do
-      if end_doc_line < #self.doc.lines and not self.foldable[end_doc_line] then self:compute_fold(end_doc_line+1) end
-      if self.foldable[end_doc_line] <= starting_fold then break end
-      self.folded[end_doc_line] = value
-      end_doc_line = end_doc_line + 1
+    local is_folded = self:is_folded(start_doc_line)
+    if value == nil then value = not is_folded end
+    if (value and not is_folded) or (is_folded and not value) then
+      local starting_fold = self.foldable[start_doc_line]
+      local end_doc_line = start_doc_line + 1
+      while end_doc_line <= #self.doc.lines do
+        if end_doc_line < #self.doc.lines and not self.foldable[end_doc_line] then self:compute_fold(end_doc_line+1) end
+        if self.foldable[end_doc_line] <= starting_fold then break end
+        self.folded[end_doc_line] = value
+        end_doc_line = end_doc_line + 1
+      end
+      --self:invalidate_cache(start_doc_line, end_doc_line)
+      -- TODO: Don't potentially need to invalidate this much, but if we don't then we get a judder if you open/close a thing at the bottom of the screen.
+      -- Should probably fix this without invadliating everything.
+      self:invalidate_cache(start_doc_line)
     end
-    --self:invalidate_cache(start_doc_line, end_doc_line)
-    -- TODO: Don't potentially need to invalidate this much, but if we don't then we get a judder if you open/close a thing at the bottom of the screen.
-    -- Should probably fix this without invadliating everything.
-    self:invalidate_cache(start_doc_line)
   end
 end
 
@@ -163,3 +168,48 @@ function DocView:on_mouse_pressed(button, x, y, clicks)
   return old_mouse_pressed(button, x, y, clicks)
 end
 
+command.add(function()
+  if not core.active_view:extends(DocView) then return false end
+  local line = core.active_view:get_selection()
+  return core.active_view:is_foldable(line), core.active_view
+end, {
+  ["codefolding:toggle"] = function(dv)
+    local line = dv:get_selection()
+    dv:toggle_fold(line)
+  end,
+  ["codefolding:fold"] = function(dv)
+    local line = dv:get_selection()
+    dv:toggle_fold(line, true)
+  end,
+  ["codefolding:unfold"] = function(dv)
+    local line = dv:get_selection()
+    dv:toggle_fold(line, false)
+  end
+})
+command.add(DocView, {
+  ["codefolding:fold-all"] = function(dv)
+    dv:compute_fold(#dv.doc.lines)
+    for i = #dv.doc.lines, 1, -1 do
+      if dv:is_foldable(i) == 0 then 
+        dv:toggle_fold(i, true) 
+      end
+    end
+  end,
+  ["codefolding-unfold-all"] = function(dv)
+    dv:compute_fold(#dv.doc.lines)
+    for i = #dv.doc.lines, 1, -1 do
+      if dv:is_foldable(i) == 0 then 
+        dv:toggle_fold(i, false) 
+      end
+    end
+  end
+})
+
+keymap.add {
+  ["ctrl+alt+["] = "codefolding:fold",
+  ["ctrl+alt+]"] = "codefolding:unfold",
+  ["ctrl+alt+\\"] = "codefolding:toggle",
+  ["ctrl+alt+-"] = "codefolding:fold-all",
+  -- huh; you can't bind ctrl+alt+=
+  ["ctrl+alt+="] = "codefolding:unfold-all"
+} 

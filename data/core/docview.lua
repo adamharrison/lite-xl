@@ -1145,7 +1145,7 @@ end
 
 local function vline_iter(state, offset1)
   local self, line, offset2 = table.unpack(state)
-  if not line or offset1 > offset2 then return nil end
+  if not line or offset1 < 0 or offset1 > offset2 then return nil end
   local text = self:get_token_text(self.dcache[line][offset1], self.dcache[line][offset1+1], self.dcache[line][offset1+2], self.dcache[line][offset1+3])
   return offset1 + 5, text, self.dcache[line][offset1+4], self.dcache[line][offset1]
 end
@@ -1246,6 +1246,7 @@ end
 
 DocView.position_offset_func = Doc.position_offset_func
 DocView.position_offset = Doc.position_offset
+DocView.position_offset_linecol = Doc.position_offset_linecol
 function DocView:position_offset_byte(line, col, offset)
   local pos
   line, pos = self:retrieve_tokens(nil, line)
