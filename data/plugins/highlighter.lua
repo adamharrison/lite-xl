@@ -32,13 +32,14 @@ local old_doc_reset_syntax = Doc.reset_syntax
 function Doc:reset_syntax()
   old_doc_reset_syntax(self)
   if self.highlighter and self.syntax ~= self.highlighter.syntax then
-    self:start(1)
+    self.highlighter:start(1)
   end
 end
 
 
 function Highlighter:on_doc_change(type, text, line1, col1, line2, col2)
   if type == "insert" or type == "remove" then self:start(math.min(line1, line2)) end
+  self:step()
 end
 
 
@@ -48,6 +49,26 @@ function Highlighter:tokenize_line(idx, state, resume)
   return res
 end
 
+function Highlighter:step()
+  if self.first_invalid_line <= self.max_wanted_line then
+    local max = math.min(self.first_invalid_line + config.plugins.highlighter.lines_per_step, self.max_wanted_line)
+    local first_changed_line, last_changed_line
+    for i = self.first_invalid_line, max do
+      local state = (i > 1) and self.lines[i - 1].state
+      local line = self.lines[i]
+      if not (line and line.init_state == state and line.text == self.doc.lines[i]) then
+        first_changed_line = first_changed_line or i
+        last_changed_line = i
+        self.lines[i] = self:tokenize_line(i, state)
+      end
+    end
+    if last_changed_line then
+      for view in pairs(self.views) do view:invalidate_cache(first_changed_line, last_changed_line) end
+    end
+    self.first_invalid_line = max + 1
+    core.redraw = true
+  end
+end
 
 function Highlighter:start(first_invalid_line, max_wanted_line)
   if first_invalid_line then self.first_invalid_line = common.clamp(self.first_invalid_line, 1, first_invalid_line) end
@@ -55,22 +76,7 @@ function Highlighter:start(first_invalid_line, max_wanted_line)
 
   self.running = self.running or core.add_thread(function()
     while self.first_invalid_line <= self.max_wanted_line do
-      local max = math.min(self.first_invalid_line + config.plugins.highlighter.lines_per_step, self.max_wanted_line)
-      local first_changed_line, last_changed_line
-      for i = self.first_invalid_line, max do
-        local state = (i > 1) and self.lines[i - 1].state
-        local line = self.lines[i]
-        if not (line and line.init_state == state and line.text == self.doc.lines[i]) then
-          first_changed_line = first_changed_line or i
-          last_changed_line = i
-          self.lines[i] = self:tokenize_line(i, state)
-        end
-      end
-      if last_changed_line then
-        for view in pairs(self.views) do view:invalidate_cache(first_changed_line, last_changed_line) end
-      end
-      self.first_invalid_line = max + 1
-      core.redraw = true
+      self:step()
       coroutine.yield(0)
     end
     self.max_wanted_line = 0
