@@ -608,8 +608,8 @@ end
 
 function DocView:get_visible_line_range()
   local minline, maxline = self:get_visible_virtual_line_range()
-  local line2 = self:get_dline(maxline)
   local line1 = self:get_dline(minline)
+  local line2 = self:get_dline(maxline)
   return line1, line2
 end
 
@@ -996,7 +996,7 @@ end
 -- `{ "doc", line, 1, #self.doc.lines[line], style }`
 -- `{ "virtual", line, text, false, style }
 function DocView:tokenize(line)
-  if line > #self.doc.lines then return {} end
+  if line <= 0 or line > #self.doc.lines then return {} end
   return { "doc", line, 1, #self.doc.lines[line], { } }
 end
 
@@ -1114,7 +1114,7 @@ function DocView:invalidate_cache(start_doc_line, end_doc_line)
   if not start_doc_line then start_doc_line = 1 end
   if not end_doc_line then end_doc_line = #self.dcache end
   if end_doc_line >= #self.dcache then
-    while #self.dcache >= start_doc_line do table.remove(self.dcache) end
+    while #self.dcache >= start_doc_line or (not self.dcache[#self.dcache] and #self.dcache > 0) do table.remove(self.dcache) end
     while self.vcache[#self.vcache] ~= nil do
       local line, offset = getvoffset(self.vcache[#self.vcache])
       if line and line < start_doc_line then break end
@@ -1226,7 +1226,7 @@ function DocView:get_closest_vline(line, col)
 end
 
 function DocView:get_dline(vline, vcol)
-  local line, col = self:retrieve_tokens(vline)
+  local line = self:retrieve_tokens(vline)
   if not line then return #self.doc.lines, self.doc.lines[#self.doc.lines]:ulen() end
   if not vcol then vcol = 1 end
   local total_line_length = 0
