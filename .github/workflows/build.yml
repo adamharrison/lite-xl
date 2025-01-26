@@ -71,6 +71,9 @@ jobs:
           if [[ "$REF" != "continuous" ]]; then
             echo "release=$REF" >> $GITHUB_OUTPUT
             echo "Release Version: $REF"
+          elif [[ `git rev-parse --abbrev-ref HEAD` == *"-preview" ]]; then
+            echo "release=`git rev-parse --abbrev-ref HEAD`" >> $GITHUB_OUTPUT
+            echo "Release Version: `git rev-parse --abbrev-ref HEAD`"
           fi
 
 
@@ -324,7 +327,7 @@ jobs:
         with:
           tag: ${{ needs.version.outputs.release }}
           name: Lite XL ${{ needs.version.outputs.release }}
-          draft: true
+          prerelease: true
           allowUpdates: true
           bodyFile: release-notes.md
           artifacts: "releases/*.*"
