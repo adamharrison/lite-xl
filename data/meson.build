@@ -12,6 +12,8 @@ if get_option('bundle_plugins').length() > 0
             '--assume-yes',
             'install',
             get_option('bundle_plugins'),
+            '--repository=https://github.com/lite-xl/lite-xl-plugin-manager.git:3.0',
+            '--mod-version=4'
         ],
         install: true,
         install_dir: [lpm_install_dir, false],
