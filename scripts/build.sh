@@ -216,12 +216,12 @@ main() {
   fi
 
   if [[ "$force_fallback" != "" ]]; then
-    git clone --depth=1 --branch release-3.2.x https://github.com/libsdl-org/SDL.git $build_dir/SDL3 &&
+    git clone --depth=1 --branch release-3.2.8 https://github.com/libsdl-org/SDL.git $build_dir/SDL3 &&
       pushd $build_dir/SDL3 && mkdir build && cd build && 
         cmake .. -DCMAKE_BUILD_TYPE=release \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DSDL_INSTALL=ON -DSDL_INSTALL_DOCS=OFF -DSDL_DEPS_SHARED=ON \
         -DSDL_DBUS=ON -DSDL_IBUS=ON -DSDL_AUDIO=OFF -DSDL_GPU=OFF -DSDL_RPATH=OFF -DSDL_PIPEWIRE=OFF \
-        -DSDL_CAMERA=OFF -DSDL_JOYSTICK=ON -DSDL_VIRTUAL_JOYSTICK=ON -DSDL_HAPTIC=OFF -DSDL_HIDAPI=ON -DSDL_DIALOG=OFF \
+        -DSDL_CAMERA=OFF -DSDL_JOYSTICK=OFF -DSDL_VIRTUAL_JOYSTICK=OFF -DSDL_HAPTIC=OFF -DSDL_HIDAPI=OFF -DSDL_DIALOG=OFF \
         -DSDL_POWER=OFF -DSDL_SENSOR=OFF -DSDL_VULKAN=OFF -DSDL_LIBUDEV=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
         -DSDL_X11=ON -DSDL_WAYLAND=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_VENDOR_INFO=lite-xl \
         -DCMAKE_INSTALL_PREFIX=$build_dir/prefix && 
