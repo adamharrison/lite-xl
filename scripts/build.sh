@@ -183,6 +183,7 @@ main() {
   elif [[ "$build_dir" == "" ]]; then
     build_dir="$(get_default_build_dir)"
   fi
+  build_dir=$(readlink -f $build_dir)
 
   # arch and platform specific stuff
   if [[ "$platform" == "macos" ]]; then
@@ -212,6 +213,21 @@ main() {
       chmod u+x "$lpm_path"
     fi
     export PATH="$(dirname "$lpm_path"):$PATH"
+  fi
+
+  if [[ "$force_fallback" != "" ]]; then
+    git clone --depth=1 --branch release-3.2.x https://github.com/libsdl-org/SDL.git $build_dir/SDL3 &&
+      pushd $build_dir/SDL3 && mkdir build && cd build && 
+        cmake .. -DCMAKE_BUILD_TYPE=release \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DSDL_INSTALL=ON -DSDL_INSTALL_DOCS=OFF -DSDL_DEPS_SHARED=ON \
+        -DSDL_DBUS=ON -DSDL_IBUS=ON -DSDL_AUDIO=OFF -DSDL_GPU=OFF -DSDL_RPATH=OFF -DSDL_PIPEWIRE=OFF \
+        -DSDL_CAMERA=OFF -DSDL_JOYSTICK=ON -DSDL_VIRTUAL_JOYSTICK=ON -DSDL_HAPTIC=OFF -DSDL_HIDAPI=ON -DSDL_DIALOG=OFF \
+        -DSDL_POWER=OFF -DSDL_SENSOR=OFF -DSDL_VULKAN=OFF -DSDL_LIBUDEV=OFF -DSDL_SHARED=OFF -DSDL_STATIC=ON \
+        -DSDL_X11=ON -DSDL_WAYLAND=ON -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF -DSDL_VENDOR_INFO=lite-xl \
+        -DCMAKE_INSTALL_PREFIX=$build_dir/prefix && 
+          make -j 8 && make install && popd
+    CFLAGS="-I${build_dir}/prefix/include $CFLAGS"
+    LDFLAGS="-L${build_dir}/prefix/lib $LDFLAGS"
   fi
 
   CFLAGS=$CFLAGS LDFLAGS=$LDFLAGS meson setup \
