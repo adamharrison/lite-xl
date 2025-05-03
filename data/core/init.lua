@@ -7,12 +7,7 @@ local command
 local keymap
 local dirwatch
 local ime
-local RootView
-local StatusView
-local TitleView
-local CommandView
-local NagView
-local DocView
+local Window
 local Doc
 local Project
 
@@ -28,8 +23,8 @@ local function save_session()
   local fp = io.open(USERDIR .. PATHSEP .. "session.lua", "w")
   if fp then
     fp:write("return {recents=", common.serialize(core.recent_projects),
-      ", window=", common.serialize(table.pack(system.get_window_size(core.window))),
-      ", window_mode=", common.serialize(system.get_window_mode(core.window)),
+      ", window=", common.serialize(table.pack(core.active_window().renwindow:get_size())),
+      ", window_mode=", common.serialize(core.active_window().renwindow:get_mode()),
       ", previous_find=", common.serialize(core.previous_find),
       ", previous_replace=", common.serialize(core.previous_replace),
       "}\n")
@@ -63,8 +58,8 @@ local function reload_customizations()
     -- it directly here disturbs the normal save operations.
     core.add_thread(function()
       local LogView = require "core.logview"
-      local rn = core.root_view.root_node
-      for _,v in pairs(core.root_view.root_node:get_children()) do
+      local rn = core.active_window().root_node
+      for _,v in pairs(core.active_window().root_view.root_node:get_children()) do
         if v:is(LogView) then
           rn:get_node_for_view(v):set_active_view(v)
           return
@@ -104,7 +99,7 @@ end
 
 function core.open_project(project)
   local project = core.set_project(project)
-  core.root_view:close_all_docviews()
+  core.active_window():close_all_docviews()
   reload_customizations()
   update_recents_project("add", project.path)
 end
@@ -276,9 +271,9 @@ end
 
 
 function core.configure_borderless_window()
-  system.set_window_bordered(core.window, not config.borderless)
-  core.title_view:configure_hit_test(config.borderless)
-  core.title_view.visible = config.borderless
+  for _, window in ipairs(core.windows) do
+    window:configure_borderless_window(config.borderless)
+  end
 end
 
 
@@ -296,6 +291,18 @@ local function add_config_files_hooks()
   end
 end
 
+function core.add_window(window)
+  table.insert(core.windows, window)
+end
+
+function core.remove_window(window)
+  for i,v in ipairs(core.windows) do
+    if v == window then
+      table.remove(core.windows, i)
+      return
+    end
+  end
+end
 
 function core.init()
   core.log_items = {}
@@ -304,14 +311,8 @@ function core.init()
   command = require "core.command"
   keymap = require "core.keymap"
   dirwatch = require "core.dirwatch"
-  ime = require "core.ime"
-  RootView = require "core.rootview"
-  StatusView = require "core.statusview"
-  TitleView = require "core.titleview"
-  CommandView = require "core.commandview"
-  NagView = require "core.nagview"
+  Window = require "core.window"
   Project = require "core.project"
-  DocView = require "core.docview"
   Doc = require "core.doc"
 
   if PATHSEP == '\\' then
@@ -320,16 +321,33 @@ function core.init()
     EXEDIR  = common.normalize_volume(EXEDIR)
   end
 
-  core.window = renwindow._restore()
-  if core.window == nil then
-    core.window = renwindow.create("")
+
+  core.frame_start = 0
+  core.docs = {}
+  core.projects = {}
+  core.cursor_clipboard = {}
+  core.cursor_clipboard_whole_line = {}
+  core.threads = setmetatable({}, { __mode = "k" })
+  core.blink_start = system.get_time()
+  core.blink_timer = core.blink_start
+  core.redraw = true
+  core.visited_files = {}
+  core.restart_request = false
+  core.quit_request = false
+  
+  core.windows = {}
+  local core_window = renwindow._restore()
+  if core_window == nil then
+    core_window = renwindow.create("")
   end
+  core.add_window(Window(core_window))
+
   do
     local session = load_session()
     if session.window_mode == "normal" then
-      system.set_window_size(core.window, table.unpack(session.window))
+      core.windows[1].renwindow:set_size(table.unpack(session.window))
     elseif session.window_mode == "maximized" then
-      system.set_window_mode(core.window, "maximized")
+      core.windows[1].renwindow:set_mode("maximized")
     end
     core.recent_projects = session.recents or {}
     core.previous_find = session.previous_find or {}
@@ -358,43 +376,6 @@ function core.init()
       end
     end
   end
-
-  core.frame_start = 0
-  core.clip_rect_stack = {{ 0,0,0,0 }}
-  core.docs = {}
-  core.projects = {}
-  core.cursor_clipboard = {}
-  core.cursor_clipboard_whole_line = {}
-  core.window_mode = "normal"
-  core.threads = setmetatable({}, { __mode = "k" })
-  core.blink_start = system.get_time()
-  core.blink_timer = core.blink_start
-  core.redraw = true
-  core.visited_files = {}
-  core.restart_request = false
-  core.quit_request = false
-
-  -- We load core views before plugins that may need them.
-  ---@type core.rootview
-  core.root_view = RootView()
-  ---@type core.commandview
-  core.command_view = CommandView()
-  ---@type core.statusview
-  core.status_view = StatusView()
-  ---@type core.nagview
-  core.nag_view = NagView()
-  ---@type core.titleview
-  core.title_view = TitleView()
-
-  -- Some plugins (eg: console) require the nodes to be initialized to defaults
-  local cur_node = core.root_view.root_node
-  cur_node.is_primary_node = true
-  cur_node:split("up", core.title_view, {y = true})
-  cur_node = cur_node.b
-  cur_node:split("up", core.nag_view, {y = true})
-  cur_node = cur_node.b
-  cur_node = cur_node:split("down", core.command_view, {y = true})
-  cur_node = cur_node:split("down", core.status_view, {y = true})
 
   -- Load default commands first so plugins can override them
   command.add_defaults()
@@ -428,7 +409,7 @@ function core.init()
   end
 
   for _, filename in ipairs(files) do
-    core.root_view:open_doc(core.open_doc(filename))
+    core.active_window():open_doc(core.open_doc(filename))
   end
 
   if not plugins_success or got_user_error or got_project_error then
@@ -492,7 +473,7 @@ function core.confirm_close_docs(docs, close_fn, ...)
       { text = "Yes", default_yes = true },
       { text = "No", default_no = true }
     }
-    core.nag_view:show("Unsaved Changes", text, opt, function(item)
+    core.windows[1].nag_view:show("Unsaved Changes", text, opt, function(item)
       if item.text == "Yes" then close_fn(table.unpack(args)) end
     end)
   else
@@ -541,7 +522,7 @@ end
 function core.restart()
   core.exit(function()
     core.restart_request = true
-    core.window:_persist()
+    core.active_window():_persist()
   end)
 end
 
@@ -723,30 +704,6 @@ function core.set_visited(filename)
 end
 
 
-function core.set_active_view(view)
-  assert(view, "Tried to set active view to nil")
-  -- Reset the IME even if the focus didn't change
-  ime.stop()
-  if view ~= core.active_view then
-    system.text_input(core.window, view:supports_text_input())
-    if core.active_view and core.active_view.force_focus then
-      core.next_active_view = view
-      return
-    end
-    core.next_active_view = nil
-    if view.doc and view.doc.filename then
-      core.set_visited(view.doc.filename)
-    end
-    core.last_active_view = core.active_view
-    core.active_view = view
-  end
-end
-
-
-function core.show_title_bar(show)
-  core.title_view.visible = show
-end
-
 
 local thread_counter = 0
 function core.add_thread(f, weak_ref, ...)
@@ -762,23 +719,6 @@ function core.add_thread(f, weak_ref, ...)
   return key
 end
 
-
-function core.push_clip_rect(x, y, w, h)
-  local x2, y2, w2, h2 = table.unpack(core.clip_rect_stack[#core.clip_rect_stack])
-  local r, b, r2, b2 = x+w, y+h, x2+w2, y2+h2
-  x, y = math.max(x, x2), math.max(y, y2)
-  b, r = math.min(b, b2), math.min(r, r2)
-  w, h = r-x, b-y
-  table.insert(core.clip_rect_stack, { x, y, w, h })
-  renderer.set_clip_rect(x, y, w, h)
-end
-
-
-function core.pop_clip_rect()
-  table.remove(core.clip_rect_stack)
-  local x, y, w, h = table.unpack(core.clip_rect_stack[#core.clip_rect_stack])
-  renderer.set_clip_rect(x, y, w, h)
-end
 
 function core.root_project() return core.projects[1] end
 function core.project_for_path(path)
@@ -816,9 +756,11 @@ end
 
 function core.get_views_referencing_doc(doc)
   local res = {}
-  local views = core.root_view.root_node:get_children()
-  for _, view in ipairs(views) do
-    if view.doc == doc then table.insert(res, view) end
+  for _, window in ipairs(core.windows) do
+    local views = window.root_view.root_node:get_children()
+    for _, view in ipairs(views) do
+      if view.doc == doc then table.insert(res, view) end
+    end
   end
   return res
 end
@@ -888,6 +830,7 @@ end
 function core.try(fn, ...)
   local err
   local ok, res = xpcall(fn, function(msg)
+    print("MSG", msg, debug.traceback())
     local item = core.error("%s", msg)
     item.info = debug.traceback("", 2):gsub("\t", "")
     err = msg
@@ -898,63 +841,17 @@ function core.try(fn, ...)
   return false, err
 end
 
-function core.on_event(type, ...)
-  local did_keymap = false
-  if type == "textinput" then
-    core.root_view:on_text_input(...)
-  elseif type == "textediting" then
-    ime.on_text_editing(...)
-  elseif type == "keypressed" then
-    -- In some cases during IME composition input is still sent to us
-    -- so we just ignore it.
-    if ime.editing then return false end
-    did_keymap = keymap.on_key_pressed(...)
-  elseif type == "keyreleased" then
-    keymap.on_key_released(...)
-  elseif type == "mousemoved" then
-    core.root_view:on_mouse_moved(...)
-  elseif type == "mousepressed" then
-    if not core.root_view:on_mouse_pressed(...) then
-      did_keymap = keymap.on_mouse_pressed(...)
-    end
-  elseif type == "mousereleased" then
-    core.root_view:on_mouse_released(...)
-  elseif type == "mouseleft" then
-    core.root_view:on_mouse_left()
-  elseif type == "mousewheel" then
-    if not core.root_view:on_mouse_wheel(...) then
-      did_keymap = keymap.on_mouse_wheel(...)
-    end
-  elseif type == "touchpressed" then
-    core.root_view:on_touch_pressed(...)
-  elseif type == "touchreleased" then
-    core.root_view:on_touch_released(...)
-  elseif type == "touchmoved" then
-    core.root_view:on_touch_moved(...)
-  elseif type == "resized" then
-    core.window_mode = system.get_window_mode(core.window)
-  elseif type == "minimized" or type == "maximized" or type == "restored" then
-    core.window_mode = type == "restored" and "normal" or type
-  elseif type == "filedropped" then
-    core.root_view:on_file_dropped(...)
-  elseif type == "focuslost" then
-    core.root_view:on_focus_lost(...)
-  elseif type == "quit" then
+function core.on_event(type, window_id, ...)
+  if type == "quit" then
     core.quit()
+    return true
   end
-  return did_keymap
-end
-
-
-local function get_title_filename(view)
-  local doc_filename = view.get_filename and view:get_filename() or view:get_name()
-  if doc_filename ~= "---" then return doc_filename end
-  return ""
-end
-
-
-function core.compose_window_title(title)
-  return (title == "" or title == nil) and "Lite XL" or title .. " - Lite XL"
+  for _, window in ipairs(core.windows) do
+    if window.id == window_id then 
+      return window:on_event(type, ...)
+    end
+  end
+  return false
 end
 
 
@@ -962,31 +859,29 @@ function core.step()
   -- handle events
   local did_keymap = false
 
-  for type, a,b,c,d in system.poll_event do
+  for type, a,b,c,d,e in system.poll_event do
     if type == "textinput" and did_keymap then
       did_keymap = false
     elseif type == "mousemoved" then
-      core.try(core.on_event, type, a, b, c, d)
+      core.try(core.on_event, type, a, b, c, d, e)
     elseif type == "enteringforeground" then
       -- to break our frame refresh in two if we get entering/entered at the same time.
       -- required to avoid flashing and refresh issues on mobile
       core.redraw = true
       break
     else
-      local _, res = core.try(core.on_event, type, a, b, c, d)
+      local _, res = core.try(core.on_event, type, a, b, c, d, e)
       did_keymap = res or did_keymap
     end
     core.redraw = true
   end
 
-  local width, height = core.window:get_size()
-
-  -- update
-  core.root_view.size.x, core.root_view.size.y = width, height
-  core.root_view:update()
+  for _, window in ipairs(core.windows) do
+    window:update()
+  end
   if not core.redraw then return false end
   core.redraw = false
-
+  
   -- close unreferenced docs
   for i = #core.docs, 1, -1 do
     local doc = core.docs[i]
@@ -995,20 +890,9 @@ function core.step()
       doc:on_close()
     end
   end
-
-  -- update window title
-  local current_title = get_title_filename(core.active_view)
-  if current_title ~= nil and current_title ~= core.window_title then
-    system.set_window_title(core.window, core.compose_window_title(current_title))
-    core.window_title = current_title
+  for _, window in ipairs(core.windows) do
+    window:step()
   end
-
-  -- draw
-  renderer.begin_frame(core.window)
-  core.clip_rect_stack[1] = { 0, 0, width, height }
-  renderer.set_clip_rect(table.unpack(core.clip_rect_stack[1]))
-  core.root_view:draw()
-  renderer.end_frame()
   return true
 end
 
@@ -1076,7 +960,11 @@ function core.run()
     if core.restart_request or core.quit_request then break end
 
     if not did_redraw then
-      if system.window_has_focus(core.window) or not did_step or run_threads_full < 2 then
+      local has_focus = false
+      for i,window in ipairs(core.windows) do
+        has_focus = has_focus or window:has_focus()
+      end
+      if has_focus or not did_step or run_threads_full < 2 then
         local now = system.get_time()
         if not next_step then -- compute the time until the next blink
           local t = now - core.blink_start
@@ -1139,5 +1027,19 @@ function core.deprecation_log(kind)
   core.warn("Used deprecated functionality [%s]. Check if your plugins are up to date.", kind)
 end
 
+function core.active_window()
+  for _, window in ipairs(core.windows) do
+    if window.renwindow:has_focus() then
+      return window
+    end
+  end
+
+  -- a lot of the code will misbehave if no windows is available, so lets return the first one
+  if #core.windows > 0 then
+    return core.windows[1]
+  end
+
+  return nil
+end
 
 return core

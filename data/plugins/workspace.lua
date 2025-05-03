@@ -195,7 +195,7 @@ end
 
 
 local function save_workspace()
-  local root = get_unlocked_root(core.root_view.root_node)
+  local root = get_unlocked_root(core.windows[1].root_view.root_node)
   local workspace_filename = get_workspace_filename(core.root_project().path)
   local fp = io.open(workspace_filename, "w")
   if fp then
@@ -210,7 +210,7 @@ end
 local function load_workspace()
   local workspace = consume_workspace_file(core.root_project().path)
   if workspace then
-    local root = get_unlocked_root(core.root_view.root_node)
+    local root = get_unlocked_root(core.windows[1].root_view.root_node)
     local active_view = load_node(root, workspace.documents)
     if active_view then
       core.set_active_view(active_view)
