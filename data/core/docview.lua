@@ -85,7 +85,7 @@ function DocView.translate.previous_char(self, line, col)
   vcol = vcol - 1
   if vcol <= 0 then
     vline = vline - 1
-    vcol = self:get_vline_length(vline) - 1
+    vcol = self:get_vline_length(vline)
   end
   return self:get_dline(vline, vcol, "prev")
 end
