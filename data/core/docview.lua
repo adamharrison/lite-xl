@@ -1186,7 +1186,8 @@ function DocView:retrieve_tokens(vline, line, visible)
     local start_new_vline = self:tokens_end_in_newline(start_line - 1) 
     for i = start_line, end_line do
       self.dtovcache[i] = vline
-      local tokens, new_vlines = tokenize_line(self, visible, total_vlines, i, start_new_vline)
+      local line_visible = original_vline and visible and math.abs(vline - original_vline) < screen_visual_height
+      local tokens, new_vlines = tokenize_line(self, line_visible, total_vlines, i, start_new_vline)
       start_new_vline = new_vlines > 0
       self.dcache[i] = tokens
       vline = vline + new_vlines

@@ -104,8 +104,8 @@ function DocView:get_h_scrollable_size()
 end
 
 local old_tokenize = DocView.tokenize
-function DocView:tokenize(line)
-  if not self.wrapping then return old_tokenize(self, line) end
+function DocView:tokenize(line, visible)
+  if not self.wrapping then return old_tokenize(self, line, visible) end
   local tokens = {}
   local x, y = self:get_content_offset()
   local gw = self:get_gutter_width()
@@ -119,7 +119,7 @@ function DocView:tokenize(line)
   local offset = docstart
   local docend = docstart + width
 
-  for _, type, l, s, e, style in self:each_token(old_tokenize(self, line)) do
+  for _, type, l, s, e, style in self:each_token(old_tokenize(self, line, visible)) do
     local font = self:get_font() or style.font
     while true do
       local text = self:get_token_text(type, l, s, e)

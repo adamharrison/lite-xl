@@ -15,10 +15,10 @@ local command = require "core.command"
 local keymap = require "core.keymap"
 
 local c_likes = { 
-  { "{", "}" },
-  { "#if", "#endif" },
-  { "#ifdef", "#endif" },
-  { "#ifndef", "#endif" }
+  { "{%s*$", "}" },
+  { "^%s*#if", "#endif" },
+  { "^%s*#ifdef", "#endif" },
+  { "^%s*#ifndef", "#endif" }
 }
 local lua = { 
   { "%f[%a]function%s*[^(]*%s*%([^%)]*%)", "%f[%a_]end%f[%A]" },
@@ -66,8 +66,8 @@ local function compute_line_characteristics(blocks, line, folding_stack)
   local found_token = 1
   local first_found_end, last_found_start
   while found_token do
-    local s,e = line:find("%s*$", found_token)
-    if s == found_token then 
+    local s = string.find(line, "%S", found_token + 1)
+    if not s then 
       break 
     end
     local opening_token_start, opening_token_end, opening_token_idx
