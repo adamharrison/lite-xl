@@ -23,6 +23,11 @@ local lua = {
 
 config.plugins.codefolding = common.merge({
   debug = false,
+  -- anything over this many characters will be truncated and replaced with ...
+  -- set to false to disable
+  fold_long_lines = 900, 
+  -- the amount of characters to show at the end
+  fold_long_trailing = 100,
   blocks = {
     ["C"] = c_likes,
     ["C++"] = c_likes,
@@ -44,6 +49,7 @@ local old_docview_new = DocView.new
 function DocView:new(...)
   -- keys are line numbers that are folded, values is either true, or  { start, end }
   self.folded = {}
+  self.expanded = {}
   -- hash contains the list of open blocks at the end of this line
   self.folding_stack = { "" }
   return old_docview_new(self, ...)
@@ -102,12 +108,83 @@ function DocView:compute_fold(doc_line)
   end
 end
 
+function DocView:truncate_tokens(tokens, line, trigger_length, trailing_length)
+  local total_length = 0
+  local i = 1
+  local new_tokens = {}
+  while i < #tokens do
+    if tokens[i] == "doc" then
+      total_length = total_length + tokens[i + 3] - tokens[i + 2]
+      if total_length > trigger_length then
+        table.move(tokens, 1, i + 4, 1, new_tokens)
+        local diff = (tokens[i + 3] - tokens[i + 2]) - (total_length - trigger_length)
+        new_tokens[i + 3] = diff + tokens[i + 2] - 1
+        break
+      end
+    else
+      total_length = total_length + tokens[i + 2]:ulen()
+      if total_length > trigger_length then
+        table.move(tokens, 1, i + 4, 1, new_tokens)
+        local diff = tokens[i + 2]:ulen() - (total_length - trigger_length)
+        new_tokens[i + 2] = new_tokens[i + 2]:usub(1, diff + 1)
+        break
+      end
+    end
+    i = i + 5
+  end
+  if total_length <= trigger_length then return tokens end
+  table.insert(new_tokens, "virtual")
+  table.insert(new_tokens, line)
+  table.insert(new_tokens, " ... ")
+  table.insert(new_tokens, false)
+  table.insert(new_tokens, { color = style.dim })
+  local trailing_tokens = {}
+  local cumulative_trailing_length = 0
+  local new_token_length = #new_tokens + 1
+  i = #tokens - 4
+  while i >= 1 do
+    local length
+    if tokens[i] == "doc" then
+      length = tokens[i + 3] - tokens[i + 2] 
+      if cumulative_trailing_length + length >= trailing_length then
+        local diff = trailing_length - cumulative_trailing_length
+        table.move(tokens, i, #tokens, new_token_length, new_tokens)
+        new_tokens[new_token_length + 2] = tokens[i + 3] - diff
+        break
+      end
+    else
+      length = tokens[i + 2]:ulen()
+      if cumulative_trailing_length + length >= trailing_length then
+        local diff = trailing_length - cumulative_trailing_length
+        table.move(tokens, i, #tokens, new_token_length, new_tokens)
+        new_tokens[new_token_length + 2] = tokens[i + 2]:usub(tokens[i + 2]:ulen() - diff, tokens[i + 2]:ulen())
+        break
+      end
+    end
+    cumulative_trailing_length = cumulative_trailing_length + length
+    i = i - 5
+  end
+  return new_tokens
+end
 
 local old_tokenize = DocView.tokenize
 function DocView:tokenize(line)
   local blocks = self:get_folding_blocks()
   local tokens = old_tokenize(self, line)
-  if not blocks then return tokens end
+  if not blocks then 
+    if config.plugins.codefolding.fold_long_lines and #self.doc.lines[line] > config.plugins.codefolding.fold_long_lines then
+      local new_tokens = not self.expanded[line] and self:truncate_tokens(tokens, line, config.plugins.codefolding.fold_long_lines, config.plugins.codefolding.fold_long_trailing)
+      if new_tokens then 
+        self.expanded[line] = false
+        return new_tokens 
+      else
+        self.expanded[line] = self.expanded[line] or nil
+      end
+    elseif self.expanded then
+      self.expanded[line] = nil
+    end
+    return tokens 
+  end
   self:compute_fold(line)
   if self.folded[line] then 
     if self.folded[line] == true then return {} end
@@ -144,6 +221,17 @@ function DocView:tokenize(line)
       end)
       return tokens
     end
+  end
+  if config.plugins.codefolding.fold_long_lines and #self.doc.lines[line] > config.plugins.codefolding.fold_long_lines then
+    local new_tokens = not self.expanded[line] and self:truncate_tokens(tokens, line, config.plugins.codefolding.fold_long_lines, config.plugins.codefolding.fold_long_trailing)
+    if new_tokens then 
+      self.expanded[line] = false
+      return new_tokens 
+    else
+      self.expanded[line] = self.expanded[line] or nil
+    end
+  else
+    self.expanded[line] = nil
   end
   if self:is_foldable(line) and self.folded[line+1] and self.folded[line+1] == true then
     -- remove the newline from the end of the tokens
@@ -204,6 +292,11 @@ function DocView:toggle_fold(start_doc_line, value)
   self:ensure_cache(1, #self.doc.lines)
 end
 
+function DocView:toggle_expand(doc_line, value)
+  self.expanded[doc_line] = value
+  self:invalidate_cache(doc_line, doc_line)
+end
+
 
 local old_get_gutter_width = DocView.get_gutter_width
 function DocView:get_gutter_width()
@@ -214,16 +307,20 @@ end
 local old_draw_line_gutter = DocView.draw_line_gutter
 function DocView:draw_line_gutter(vline, x, y, width)
   local lh = old_draw_line_gutter(self, vline, x, y, width)
-  if not self:get_folding_blocks() then return lh end
+  local blocks = self:get_folding_blocks()
   local line, col = self:get_dline(vline)
   if col == 1 then
     local size = lh - 8
     local startx = x + 4
     local starty = y + (lh - size) / 2
-    if self:is_foldable(line) then
+    if self.expanded[line] == false or (blocks and self:is_foldable(line)) then
       renderer.draw_rect(startx, starty, size, size, style.accent)
       renderer.draw_rect(startx + 1, starty + 1, size - 2, size - 2, self.hovering_foldable == line and style.dim or style.background)
-      common.draw_text(self:get_font(), style.accent, self:is_folded(line) and "+" or "-", "center", startx, starty, size, size)
+      if self.expanded[line] == false then
+        common.draw_text(self:get_font(), style.accent, ">", "center", startx, starty, size, size)
+      else
+        common.draw_text(self:get_font(), style.accent, self:is_folded(line) and "+" or "-", "center", startx, starty, size, size)
+      end      
     end
     if config.plugins.codefolding.debug then
       common.draw_text(self:get_font(), style.accent, #self.folding_stack[line] or 0, "center", startx, starty, size, size)
@@ -236,11 +333,10 @@ local old_mouse_moved = DocView.on_mouse_moved
 function DocView:on_mouse_moved(x, y, ...)
   old_mouse_moved(self, x, y, ...)
   local blocks = self:get_folding_blocks()
-  if not blocks then return end
   self.hovering_foldable = false
   if self.hovering_gutter and x < self.position.x + self:get_font():get_width("+") + style.padding.x then
     local line = self:resolve_screen_position(x, y)
-    if self:is_foldable(line) then
+    if self.expanded[line] == false or (blocks and self:is_foldable(line)) then
       self.hovering_foldable = line
       self.cursor = "hand"
     end
@@ -251,7 +347,10 @@ local old_mouse_pressed = DocView.on_mouse_pressed
 function DocView:on_mouse_pressed(button, x, y, clicks)
   if old_mouse_pressed(button, x, y, clicks) then return true end
   local blocks = self:get_folding_blocks()
-  if blocks and button == "left" and self.hovering_foldable then
+  if self.hovering_foldable and self.expanded[self.hovering_foldable] == false then
+    self:toggle_expand(self.hovering_foldable, true)
+    return true
+  elseif blocks and button == "left" and self.hovering_foldable then
     self:toggle_fold(self.hovering_foldable)
     return true
   end
@@ -272,9 +371,23 @@ end, {
     local line = dv:get_selection()
     dv:toggle_fold(line, true)
   end,
+  ["codefolding:expand"] = function(dv)
+    local line = dv:get_selection()
+    dv:toggle_expand(line, true)
+  end,
   ["codefolding:unfold"] = function(dv)
     local line = dv:get_selection()
     dv:toggle_fold(line, false)
+  end
+})
+command.add(function()
+   if not core.active_view:extends(DocView) then return false end 
+   local line = core.active_view:get_selection()
+   return core.active_view.expanded[line] ~= nil, core.active_view
+end, {
+  ["codefolding:expand"] = function(dv)
+    local line = dv:get_selection()
+    dv:toggle_expand(line, true)
   end
 })
 command.add(DocView, {
@@ -297,6 +410,7 @@ command.add(DocView, {
 })
 
 keymap.add {
+  ["ctrl+alt+."] = "codefolding:expand",
   ["ctrl+alt+["] = "codefolding:fold",
   ["ctrl+alt+]"] = "codefolding:unfold",
   ["ctrl+alt+\\"] = "codefolding:toggle",
