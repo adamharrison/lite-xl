@@ -1,4 +1,9 @@
 -- mod-version:4
+-- Plugin that handles code folding within the editor.
+-- language_* plugins can modify the config for what can be folded by doing, for example:
+-- config.plugins.codefolding.blocks["perl"] = { { "{", "}" }
+-- 
+-- This plugin also handles the folding of long lines.
 local core = require "core"
 local config = require "core.config"
 local style = require "core.style"
@@ -28,13 +33,13 @@ config.plugins.codefolding = common.merge({
   fold_long_lines = 900, 
   -- the amount of characters to show at the end
   fold_long_trailing = 100,
-  blocks = {
+  blocks = common.merge({
     ["C"] = c_likes,
     ["C++"] = c_likes,
     ["JavaScript"] = c_likes,
     ["Lua"] = lua,
     ["*"] = nil
-  }
+  }, config.plugins.codefolding.blocks or {})
 }, config.plugins.codefolding);
 
 function DocView:get_folding_blocks()
@@ -317,7 +322,7 @@ function DocView:draw_line_gutter(vline, x, y, width)
       renderer.draw_rect(startx, starty, size, size, style.accent)
       renderer.draw_rect(startx + 1, starty + 1, size - 2, size - 2, self.hovering_foldable == line and style.dim or style.background)
       if self.expanded[line] == false then
-        common.draw_text(self:get_font(), style.accent, ">", "center", startx, starty, size, size)
+        common.draw_text(self:get_font(), style.accent, ">", "center", startx, starty - 1, size, size)
       else
         common.draw_text(self:get_font(), style.accent, self:is_folded(line) and "+" or "-", "center", startx, starty, size, size)
       end      
