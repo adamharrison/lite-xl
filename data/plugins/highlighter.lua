@@ -52,16 +52,27 @@ function Highlighter:step()
     for i = self.first_invalid_line, max do
       local state = (i > 1) and self.lines[i - 1].state
       local line = self.lines[i]
-      if not (line and line.init_state == state and line.text == self.doc.lines[i]) then
+      if line and line.resume and (line.init_state ~= state or line.text ~= self.doc.lines[i]) then
+        -- Reset the progress if no longer valid
+        line.resume = nil
+      end
+      if not (line and line.init_state == state and line.text == self.doc.lines[i] and not line.resume) then
         first_changed_line = first_changed_line or i
         last_changed_line = i
-        self.lines[i] = self:tokenize_line(i, state)
+        self.lines[i] = self:tokenize_line(i, state, line and line.resume)
+        if self.lines[i].resume then
+          self.first_invalid_line = i
+          goto yield
+        end
       end
     end
     if last_changed_line then
-      for view in pairs(self.views) do view:invalidate_cache(first_changed_line, last_changed_line) end
+      for view in pairs(self.views) do 
+        view:invalidate_cache(first_changed_line, last_changed_line) 
+      end
     end
     self.first_invalid_line = max + 1
+    ::yield::
     core.redraw = true
   end
 end
@@ -109,6 +120,7 @@ end
 -- replaces all strings, and comments with whitespace
 function Highlighter:get_syntaxful_line(line)
   local t = {}
+  if not self.lines[line] then return self.doc.lines[line] end
   for _, type, text in self:each_token(line) do
     table.insert(t, (type == "comment" or type == "string") and string.rep(" ", text:ulen()) or text)
   end
@@ -123,7 +135,7 @@ function DocView:tokenize(line)
   if not highlighter.views[self] then highlighter.views[self] = true end
 
   local tokens = old_tokenize(self, line)
-  if #tokens == 0 then return tokens end
+  if #tokens == 0 or (not highlighter.lines[line] and line > 1) then return tokens end
   local tokenized = highlighter:get_line(line)
   -- Walk through all doc tokens, and then map them onto what we've tokenized.
   local colorized = {}
