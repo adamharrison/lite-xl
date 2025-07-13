@@ -357,14 +357,14 @@ function DocView:text_input(text, idx)
 
     if self.overwrite
     and not had_selection
-    and col1 < #self.lines[line1]
+    and col1 < (self.lines[line1]:ulen() or #self.lines[line1])
     and text:ulen() == 1 then
       local line2, col2 = translate.next_char(self, line1, col1)
       self.doc:remove(line1, col1, line2, col2, self.selections)
     end
 
     self.doc:insert(line1, col1, text, self.selections)
-    self:move_to_cursor(sidx, #text)
+    self:move_to_cursor(sidx, text:ulen())
   end
 end
 

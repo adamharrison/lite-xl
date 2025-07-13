@@ -155,7 +155,7 @@ function DocView:tokenize(line, visible)
           table.insert(colorized, common.merge(token_style, { color = style.syntax[type], font = style.syntax_fonts[type], type = type }))
         end
         if offset > end_offset then break end
-        offset = offset + #text
+        offset = offset + width
       end
     else
       table.move(tokens, idx - 5, idx - 1, #colorized + 1, colorized)
