@@ -173,9 +173,9 @@ function DocView:truncate_tokens(tokens, line, trigger_length, trailing_length)
 end
 
 local old_tokenize = DocView.tokenize
-function DocView:tokenize(line)
+function DocView:tokenize(line, visible)
   local blocks = self:get_folding_blocks()
-  local tokens = old_tokenize(self, line)
+  local tokens = old_tokenize(self, line, visible)
   if not blocks then 
     if config.plugins.codefolding.fold_long_lines and #self.doc.lines[line] > config.plugins.codefolding.fold_long_lines then
       local new_tokens = not self.expanded[line] and self:truncate_tokens(tokens, line, config.plugins.codefolding.fold_long_lines, config.plugins.codefolding.fold_long_trailing)
