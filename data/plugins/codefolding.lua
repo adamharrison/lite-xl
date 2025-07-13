@@ -15,7 +15,7 @@ local command = require "core.command"
 local keymap = require "core.keymap"
 
 local c_likes = { 
-  { "{%s*$", "}" },
+  { "{", "}" },
   { "^%s*#if", "#endif" },
   { "^%s*#ifdef", "#endif" },
   { "^%s*#ifndef", "#endif" }
@@ -66,7 +66,7 @@ local function compute_line_characteristics(blocks, line, folding_stack)
   local found_token = 1
   local first_found_end, last_found_start
   while found_token do
-    local s = string.find(line, "%S", found_token + 1)
+    local s = string.find(line, "%S", found_token)
     if not s then 
       break 
     end
@@ -271,7 +271,7 @@ function DocView:toggle_fold(start_doc_line, value)
       local end_doc_line = start_doc_line + 1
       while end_doc_line <= #self.doc.lines do
         if end_doc_line < #self.doc.lines and not self.folding_stack[end_doc_line] then 
-          self:compute_fold(end_doc_line+1) 
+          self:compute_fold(end_doc_line+1, true) 
         end
         if #self.folding_stack[end_doc_line] < starting_fold then 
           local _, _, last_found_start = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(end_doc_line, true), self.folding_stack[end_doc_line - 1])
