@@ -129,13 +129,15 @@ end
 
 
 local old_tokenize = DocView.tokenize
-function DocView:tokenize(line)
+function DocView:tokenize(line, visible)
   if not self.doc.highlighter then self.doc.highlighter = Highlighter(self.doc) end
   local highlighter = self.doc.highlighter
   if not highlighter.views[self] then highlighter.views[self] = true end
 
-  local tokens = old_tokenize(self, line)
-  if #tokens == 0 or (not highlighter.lines[line] and line > 1) then return tokens end
+  local tokens = old_tokenize(self, line, visible)
+  if #tokens == 0 or (not highlighter.lines[line] and line > 1 and not visible) then 
+    return tokens 
+  end
   local tokenized = highlighter:get_line(line)
   -- Walk through all doc tokens, and then map them onto what we've tokenized.
   local colorized = {}
