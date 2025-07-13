@@ -100,7 +100,7 @@ local function compute_line_characteristics(blocks, line, folding_stack)
   return folding_stack, first_found_end, last_found_start
 end
 
-function DocView:compute_fold(doc_line)
+function DocView:compute_fold(doc_line, visible)
   local blocks = self:get_folding_blocks()
   if not blocks then return end
   local start_of_computation = doc_line
@@ -109,7 +109,7 @@ function DocView:compute_fold(doc_line)
     start_of_computation = i
   end
   for i = start_of_computation, doc_line do
-    self.folding_stack[i] = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(i), self.folding_stack[i - 1] or "")
+    self.folding_stack[i] = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(i, visible), self.folding_stack[i - 1] or "")
   end
 end
 
@@ -190,14 +190,14 @@ function DocView:tokenize(line, visible)
     end
     return tokens 
   end
-  self:compute_fold(line)
+  self:compute_fold(line, visible)
   if self.folded[line] then 
     if self.folded[line] == true then return {} end
     -- if this is the end of a fold, let's compute the line characteristics again. If we don't have an end block, then this fold 
     -- is no longer valid, so go back and invalidate everything prior to this that was folded, until we don't get a fold
     ---local stack, first_found_end, last_found_start = compute_line_characteristics(blocks, self.doc.get_syntaxful_line(line), self.folding_stack[line-1] or "")
     --local last_found_start = compute_line_characteristics(blocks, self.doc.get_syntaxful_line(line), self.folding_stack[line-1] or "")
-    local _, last_found_start = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(line), self.folding_stack[line-1] or "")
+    local _, last_found_start = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(line, true), self.folding_stack[line-1] or "")
     if last_found_start then
       local idx = 1
       local new_tokens = {}
@@ -274,7 +274,7 @@ function DocView:toggle_fold(start_doc_line, value)
           self:compute_fold(end_doc_line+1) 
         end
         if #self.folding_stack[end_doc_line] < starting_fold then 
-          local _, _, last_found_start = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(end_doc_line), self.folding_stack[end_doc_line - 1])
+          local _, _, last_found_start = compute_line_characteristics(blocks, self.doc.highlighter:get_syntaxful_line(end_doc_line, true), self.folding_stack[end_doc_line - 1])
           self.folded[end_doc_line] = value and last_found_start
           break 
         end
@@ -293,8 +293,6 @@ function DocView:toggle_fold(start_doc_line, value)
       self:invalidate_cache(start_doc_line)
     end
   end
-  self:invalidate_cache()
-  self:ensure_cache(1, #self.doc.lines)
 end
 
 function DocView:toggle_expand(doc_line, value)

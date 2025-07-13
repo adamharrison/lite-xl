@@ -118,9 +118,9 @@ function Highlighter:each_token(line)
 end
 
 -- replaces all strings, and comments with whitespace
-function Highlighter:get_syntaxful_line(line)
+function Highlighter:get_syntaxful_line(line, force)
   local t = {}
-  if not self.lines[line] then return self.doc.lines[line] end
+  if not self.lines[line] and not force then return self.doc.lines[line] end
   for _, type, text in self:each_token(line) do
     table.insert(t, (type == "comment" or type == "string") and string.rep(" ", text:ulen()) or text)
   end
