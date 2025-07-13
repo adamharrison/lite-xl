@@ -191,7 +191,7 @@ function DocView:resolve_screen_position(x, y)
   local default_font = self:get_font()
   local _, indent_size = self.doc:get_indent_info()
   default_font:set_tab_size(indent_size)
-  local line = self:retrieve_tokens(vline)
+  local line = self:retrieve_tokens(vline, nil, true)
   if not line then return #self.doc.lines, self.doc.lines[#self.doc.lines]:ulen() end
   for _, text, style, type, dline, offset in self:each_vline_token(vline) do
     local len = text:ulen() or #text
@@ -674,7 +674,7 @@ end
 
 function DocView:scroll_to_make_visible(line, col)
   local ox, oy = self:get_content_offset()
-  self:retrieve_tokens(nil, line)
+  self:retrieve_tokens(nil, line, true)
   local lx, ly = self:get_line_screen_position(line, col)
   local lh = self:get_line_height()
   local _, _, _, scroll_h = self.h_scrollbar:get_track_rect()
@@ -994,7 +994,8 @@ function DocView:draw()
   local _, indent_size = self.doc:get_indent_info()
   self:get_font():set_tab_size(indent_size)
 
-  local minline, maxline = self:ensure_cache(self:get_visible_virtual_line_range())
+  local vminline, vmaxline = self:get_visible_virtual_line_range()
+  local minline, maxline = self:ensure_cache(vminline, vmaxline, true)
   
   local lh = self:get_line_height()
   local _, y = self:get_virtual_line_offset(minline)
@@ -1010,7 +1011,7 @@ end
 -- Plugins hook this to return a line/col list from `doc`, or provide a virtual line.
 -- `{ "doc", line, 1, #self.doc.lines[line], style }`
 -- `{ "virtual", line, text, false, style }
-function DocView:tokenize(line)
+function DocView:tokenize(line, visible)
   if line <= 0 or line > #self.doc.lines then return {} end
   return { "doc", line, 1, #self.doc.lines[line], { } }
 end
@@ -1068,8 +1069,8 @@ Each token can contain *at most* one new line, at the end of it.
 local function mkvoffset(line, offset) return ((line << 32) | offset) end
 local function getvoffset(number) if not number then return nil end return number >> 32, number & 0xFFFFFFFF end
 
-local function tokenize_line(self, vlines, line, start_new_vline)
-  local tokens = self:tokenize(line)
+local function tokenize_line(self, visible, vlines, line, start_new_vline)
+  local tokens = self:tokenize(line, visible)
   local new_vlines = 0
   if #tokens > 0 and start_new_vline then
     table.insert(vlines, mkvoffset(line, 1))
@@ -1114,14 +1115,18 @@ function DocView:tokens_end_in_newline(line)
 end
 
 -- returns the doc line and token offset associated with this line/vline.
-function DocView:retrieve_tokens(vline, line)
+function DocView:retrieve_tokens(vline, line, visible)
   -- tokenize up until we have the tokens required for the specified line or vline
+  local original_vline = vline or line
+  local minline, maxline = self:get_visible_virtual_line_range()
+  local screen_visual_height = (maxline - minline) * 2
   while ((vline and vline > #self.vcache) or (line and line > #self.dcache)) and #self.dcache < #self.doc.lines do
     local vlines = {}
     local prev_newline = self:previous_tokens_end_in_newline(#self.dcache)
     local current_vline = prev_newline and #self.vcache + 1 or #self.vcache
     repeat
-      local tokens, new_vlines = tokenize_line(self, vlines, #self.dcache + 1, prev_newline)
+      local line_visible = original_vline and visible and math.abs(current_vline - original_vline) < screen_visual_height
+      local tokens, new_vlines = tokenize_line(self, line_visible, vlines, #self.dcache + 1, prev_newline)
       table.insert(self.dcache, tokens)
       self.dtovcache[#self.dcache] = current_vline
       current_vline = current_vline + new_vlines
@@ -1181,7 +1186,7 @@ function DocView:retrieve_tokens(vline, line)
     local start_new_vline = self:tokens_end_in_newline(start_line - 1) 
     for i = start_line, end_line do
       self.dtovcache[i] = vline
-      local tokens, new_vlines = tokenize_line(self, total_vlines, i, start_new_vline)
+      local tokens, new_vlines = tokenize_line(self, visible, total_vlines, i, start_new_vline)
       start_new_vline = new_vlines > 0
       self.dcache[i] = tokens
       vline = vline + new_vlines
@@ -1236,8 +1241,8 @@ function DocView:invalidate_cache(start_doc_line, end_doc_line)
     end
   end
 end
-function DocView:ensure_cache(start_vline, end_vline) 
-  for i = end_vline, start_vline, -1 do self:retrieve_tokens(i) end
+function DocView:ensure_cache(start_vline, end_vline, visible) 
+  for i = end_vline, start_vline, -1 do self:retrieve_tokens(i, nil, visible) end
   return start_vline, end_vline
 end
 
@@ -1287,9 +1292,9 @@ local function dline_iter(state, idx)
 end
 
 
-function DocView:each_vline_token(vline)
-  local line1, offset1 = self:retrieve_tokens(vline)
-  local line2, offset2 = self:retrieve_tokens(vline + 1)
+function DocView:each_vline_token(vline, visible)
+  local line1, offset1 = self:retrieve_tokens(vline, nil, visible)
+  local line2, offset2 = self:retrieve_tokens(vline + 1, nil, visible)
   if vline == #self.vcache then
     return vline_iter, { self, line2 + 1, 1 }, mkvoffset(line1, offset1)
   end
