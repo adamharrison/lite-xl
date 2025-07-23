@@ -71,6 +71,9 @@ jobs:
           if [[ "$REF" != "continuous" ]]; then
             echo "release=$REF" >> $GITHUB_OUTPUT
             echo "Release Version: $REF"
+          elif [[ `git rev-parse --abbrev-ref HEAD` == *"-preview" ]]; then
+            echo "release=`git rev-parse --abbrev-ref HEAD`" >> $GITHUB_OUTPUT
+            echo "Release Version: `git rev-parse --abbrev-ref HEAD`"
           fi
 
 
