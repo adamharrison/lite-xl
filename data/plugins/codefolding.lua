@@ -221,9 +221,7 @@ function DocView:tokenize(line, visible)
         start_line = start_line - 1
       end
       -- should probably avoid doing this
-      core.add_thread(function()
-        self:invalidate_cache(start_line, line)
-      end)
+      self:invalidate_cache(start_line, line)
       return tokens
     end
   end

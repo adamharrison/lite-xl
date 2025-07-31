@@ -840,6 +840,14 @@ function DocView:update()
     core.blink_timer = tb
   end
 
+  if self.deferred_invalidation then
+    local invalidation = self.deferred_invalidation
+    self.deferred_invalidation = nil
+    for i,v in ipairs(invalidation) do
+      self:invalidate_cache(table.unpack(v))
+    end
+  end
+
   self:update_ime_location()
 
   DocView.super.update(self)
@@ -1116,7 +1124,7 @@ end
 
 -- returns the doc line and token offset associated with this line/vline.
 function DocView:retrieve_tokens(vline, line, visible)
-  self.retrieving_tokens = true
+  if not self.deferred_invalidation then self.deferred_invalidation = {} end
   -- tokenize up until we have the tokens required for the specified line or vline
   local original_vline = vline or line
   local minline, maxline = self:get_visible_virtual_line_range()
@@ -1221,6 +1229,7 @@ end
 -- than indicated with its parameters. It will invalidate *at least* as much as
 -- you specify, but may invalidate more.
 function DocView:invalidate_cache(start_doc_line, end_doc_line)
+  if self.deferred_invalidation then table.insert(self.deferred_invalidation, { start_doc_line, end_doc_line }) return end
   if not start_doc_line and not end_doc_line then self.vcache, self.dcache, self.dtovcache = {}, {}, {} return end
   if not start_doc_line then start_doc_line = 1 end
   if not end_doc_line then end_doc_line = #self.dcache end
