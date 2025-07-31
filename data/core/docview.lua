@@ -1104,7 +1104,7 @@ end
 
 function DocView:dump_virtual_lines()
   for i = 1, #self.dcache do
-    print("V", i, self.dcache[i], getvoffset(self.vcache[i]))
+    print("V", i, self.dcache[i], getvoffset(self.vcache[i]), self.vcache[i])
   end
 end
 
@@ -1116,6 +1116,7 @@ end
 
 -- returns the doc line and token offset associated with this line/vline.
 function DocView:retrieve_tokens(vline, line, visible)
+  self.retrieving_tokens = true
   -- tokenize up until we have the tokens required for the specified line or vline
   local original_vline = vline or line
   local minline, maxline = self:get_visible_virtual_line_range()
@@ -1209,6 +1210,7 @@ function DocView:retrieve_tokens(vline, line, visible)
       end
     end
     table.move(total_vlines, 1, #total_vlines, start_vline, self.vcache)
+    self.retrieving_tokens = false
     return end_line, 1
   end
   return #self.doc.lines, #self.dcache[#self.doc.lines] - 4
