@@ -56,7 +56,7 @@ function NagView:get_target_height()
 end
 
 function NagView:get_scrollable_size()
-  local w, h = core.active_window().renwindow:get_size()
+  local w, h = self.root_view.window.renwindow:get_size()
   if self.visible and self:get_target_height() > h then
     self.size.y = h
     return self:get_target_height()

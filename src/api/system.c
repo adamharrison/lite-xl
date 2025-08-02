@@ -174,6 +174,11 @@ top:
     case SDL_EVENT_QUIT:
       lua_pushstring(L, "quit");
       return 1;
+    case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+    case SDL_EVENT_WINDOW_DESTROYED:
+      lua_pushstring(L, "closed");
+      lua_pushinteger(L, e.window.windowID);
+      return 2;
 
     case SDL_EVENT_WINDOW_RESIZED:
       {
@@ -225,20 +230,16 @@ top:
       SDL_FlushEvent(SDL_EVENT_KEY_DOWN);
       goto top;
 
-
     case SDL_EVENT_DROP_FILE:
-      {
-        RenWindow* window_renderer = ren_find_window_from_id(e.drop.windowID);
-        SDL_GetMouseState(&mx, &my);
-        lua_pushstring(L, "filedropped");
-        lua_pushinteger(L, e.drop.windowID);
-        lua_pushstring(L, e.drop.data);
-        // a DND into dock event fired before a window is created
-        lua_pushinteger(L, mx * (window_renderer ? window_renderer->scale_x : 0));
-        lua_pushinteger(L, my * (window_renderer ? window_renderer->scale_y : 0));
-        return 5;
-      }
-
+      SDL_GetMouseState(&mx, &my);
+      lua_pushstring(L, "filedropped");
+      lua_pushinteger(L, e.drop.windowID);
+      lua_pushstring(L, e.drop.data);
+      // a DND into dock event fired before a window is created
+      lua_pushinteger(L, mx);
+      lua_pushinteger(L, my);
+      return 5;
+      
     case SDL_EVENT_KEY_DOWN:
 #ifdef __APPLE__
       /* on macos 11.2.3 with sdl 2.0.14 the keyup handler for cmd+w below
@@ -285,12 +286,11 @@ top:
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
       {
         if (e.button.button == 1) { SDL_CaptureMouse(1); }
-        RenWindow* window_renderer = ren_find_window_from_id(e.button.windowID);
         lua_pushstring(L, "mousepressed");
         lua_pushinteger(L, e.button.windowID);
         lua_pushstring(L, button_name(e.button.button));
-        lua_pushinteger(L, e.button.x * window_renderer->scale_x);
-        lua_pushinteger(L, e.button.y * window_renderer->scale_y);
+        lua_pushinteger(L, e.button.x);
+        lua_pushinteger(L, e.button.y);
         lua_pushinteger(L, e.button.clicks);
         return 6;
       }
@@ -298,12 +298,11 @@ top:
     case SDL_EVENT_MOUSE_BUTTON_UP:
       {
         if (e.button.button == 1) { SDL_CaptureMouse(0); }
-        RenWindow* window_renderer = ren_find_window_from_id(e.button.windowID);
         lua_pushstring(L, "mousereleased");
         lua_pushinteger(L, e.button.windowID);
         lua_pushstring(L, button_name(e.button.button));
-        lua_pushinteger(L, e.button.x * window_renderer->scale_x);
-        lua_pushinteger(L, e.button.y * window_renderer->scale_y);
+        lua_pushinteger(L, e.button.x);
+        lua_pushinteger(L, e.button.y);
         return 5;
       }
 
@@ -316,14 +315,13 @@ top:
           e.motion.xrel += event_plus.motion.xrel;
           e.motion.yrel += event_plus.motion.yrel;
         }
-        RenWindow* window_renderer = ren_find_window_from_id(e.motion.windowID);
         lua_pushstring(L, "mousemoved");
         lua_pushinteger(L, e.motion.windowID);
-        lua_pushinteger(L, e.motion.x * window_renderer->scale_x);
-        lua_pushinteger(L, e.motion.y * window_renderer->scale_y);
-        lua_pushinteger(L, e.motion.xrel * window_renderer->scale_x);
-        lua_pushinteger(L, e.motion.yrel * window_renderer->scale_y);
-        return 7;
+        lua_pushinteger(L, e.motion.x);
+        lua_pushinteger(L, e.motion.y);
+        lua_pushinteger(L, e.motion.xrel);
+        lua_pushinteger(L, e.motion.yrel);
+        return 6;
       }
 
     case SDL_EVENT_MOUSE_WHEEL:

@@ -58,8 +58,8 @@ local function reload_customizations()
     -- it directly here disturbs the normal save operations.
     core.add_thread(function()
       local LogView = require "core.logview"
-      local rn = core.root_view.root_node
-      for _,v in pairs(core.root_view.root_node:get_children()) do
+      local rn = core.active_window().root_node
+      for _,v in pairs(core.active_window().root_view.root_node:get_children()) do
         if v:is(LogView) then
           rn:get_node_for_view(v):set_active_view(v)
           return
@@ -99,7 +99,7 @@ end
 
 function core.open_project(project)
   local project = core.set_project(project)
-  core.root_view:close_all_docviews()
+  core.active_window():close_all_docviews()
   reload_customizations()
   update_recents_project("add", project.path)
 end
@@ -272,7 +272,7 @@ end
 
 function core.configure_borderless_window()
   for _, window in ipairs(core.windows) do
-    window:configure_borderless_window(not config.borderless)
+    window:configure_borderless_window(config.borderless)
   end
 end
 
@@ -291,6 +291,18 @@ local function add_config_files_hooks()
   end
 end
 
+function core.add_window(window)
+  table.insert(core.windows, window)
+end
+
+function core.remove_window(window)
+  for i,v in ipairs(core.windows) do
+    if v == window then
+      table.remove(core.windows, i)
+      return
+    end
+  end
+end
 
 function core.init()
   core.log_items = {}
@@ -328,7 +340,7 @@ function core.init()
   if core_window == nil then
     core_window = renwindow.create("")
   end
-  table.insert(core.windows, Window(core_window))
+  core.add_window(Window(core_window))
 
   do
     local session = load_session()
@@ -397,7 +409,7 @@ function core.init()
   end
 
   for _, filename in ipairs(files) do
-    core.root_view:open_doc(core.open_doc(filename))
+    core.active_window():open_doc(core.open_doc(filename))
   end
 
   if not plugins_success or got_user_error or got_project_error then
@@ -850,7 +862,7 @@ function core.step()
     if type == "textinput" and did_keymap then
       did_keymap = false
     elseif type == "mousemoved" then
-      core.try(core.on_event, type, a, b, c, d)
+      core.try(core.on_event, type, a, b, c, d, e)
     elseif type == "enteringforeground" then
       -- to break our frame refresh in two if we get entering/entered at the same time.
       -- required to avoid flashing and refresh issues on mobile
@@ -947,7 +959,11 @@ function core.run()
     if core.restart_request or core.quit_request then break end
 
     if not did_redraw then
-      if core.windows[1].renwindow:has_focus() or not did_step or run_threads_full < 2 then
+      local has_focus = false
+      for i,window in ipairs(core.windows) do
+        has_focus = has_focus or window:has_focus()
+      end
+      if has_focus or not did_step or run_threads_full < 2 then
         local now = system.get_time()
         if not next_step then -- compute the time until the next blink
           local t = now - core.blink_start

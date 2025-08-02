@@ -1,3 +1,4 @@
+local core = require "core"
 local Object = require "core.object"
 local RootView = require "core.rootview"
 local CommandView = require "core.commandview"
@@ -15,6 +16,8 @@ function Window:new(renwindow)
   self.id = renwindow:get_id()
   self.mode = "normal"
   self.title = nil
+  self.borderless = nil
+  self.scale = { x = 1.0, y = 1.0 }
   self.clip_rect_stack = {{ 0,0,0,0 }}
   self.active_view = nil
   self.last_active_view = nil
@@ -48,6 +51,9 @@ local function get_title_filename(view)
   return ""
 end
 
+function Window:has_focus()
+  return self.renwindow:has_focus()
+end
 
 function Window:compose_window_title(title)
   return (title == "" or title == nil) and "Lite XL" or title .. " - Lite XL"
@@ -128,9 +134,10 @@ function Window:step()
 end
 
 function Window:configure_borderless_window(borderless)
-  self.renwindow:set_bordered(borderless)
-  self.title_view:configure_hit_test(config.borderless)
-  self.title_view.visible = config.borderless
+  self.borderless = borderless
+  self.renwindow:set_bordered(not borderless)
+  self.title_view:configure_hit_test(borderless)
+  self.title_view.visible = borderless
 end
 
 function Window:on_event(type, ...)
@@ -148,13 +155,16 @@ function Window:on_event(type, ...)
   elseif type == "keyreleased" then
     keymap.on_key_released(...)
   elseif type == "mousemoved" then
-    self.root_view:on_mouse_moved(...)
+    local x1, y1, x2, y2 = ...
+    self.root_view:on_mouse_moved(x1 * self.scale.x, y1 * self.scale.y, x2 * self.scale.x, y2 * self.scale.y)
   elseif type == "mousepressed" then
-    if not self.root_view:on_mouse_pressed(...) then
-      did_keymap = keymap.on_mouse_pressed(...)
+    local bname, x, y, clicks = ...
+    if not self.root_view:on_mouse_pressed(bname, x * self.scale.x, y * self.scale.y, clicks) then
+      did_keymap = keymap.on_mouse_pressed(bname, x * self.scale.x, y * self.scale.y, clicks)
     end
   elseif type == "mousereleased" then
-    self.root_view:on_mouse_released(...)
+    local bname, x, y = ...
+    self.root_view:on_mouse_released(bname, x * self.scale.x, y * self.scale.y)
   elseif type == "mouseleft" then
     self.root_view:on_mouse_left()
   elseif type == "mousewheel" then
@@ -175,6 +185,14 @@ function Window:on_event(type, ...)
     self.root_view:on_file_dropped(...)
   elseif type == "focuslost" then
     self.root_view:on_focus_lost(...)
+  elseif type == "closed" then
+    if #core.windows > 1 then
+      self.renwindow = nil
+      collectgarbage("collect")
+      core.remove_window(self)
+    else
+      core.quit()
+    end
   end
   return did_keymap
 end

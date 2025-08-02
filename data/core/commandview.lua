@@ -247,8 +247,8 @@ end
 
 
 function CommandView:exit(submitted, inexplicit)
-  if core.active_view == self then
-    core.set_active_view(core.last_active_view)
+  if self.root_view.window.active_view == self then
+    self.root_view.window:set_active_view(self.root_view.window.last_active_view)
   end
   local cancel = self.state.cancel
   self.state = default_state
@@ -293,7 +293,7 @@ end
 function CommandView:update()
   CommandView.super.update(self)
 
-  if core.active_view ~= self and self.state ~= default_state then
+  if self.root_view.window.active_view ~= self and self.state ~= default_state then
     self:exit(false, true)
   end
 
@@ -335,7 +335,7 @@ function CommandView:update()
 
   -- update size based on whether this is the active_view
   local dest = 0
-  if self == core.active_view then
+  if self == self.root_view.window.active_view then
     dest = style.font:get_height() + style.padding.y * 2
   end
   self:move_towards(self.size, "y", dest, nil, "commandview")
@@ -351,10 +351,10 @@ function CommandView:draw_line_gutter(idx, x, y)
   local yoffset = self:get_line_text_y_offset()
   local pos = self.position
   local color = common.lerp(style.text, style.accent, self.gutter_text_brightness / 100)
-  core.push_clip_rect(pos.x, pos.y, self:get_gutter_width(), self.size.y)
+  self.root_view.window:push_clip_rect(pos.x, pos.y, self:get_gutter_width(), self.size.y)
   x = x + style.padding.x
   renderer.draw_text(self:get_font(), self.label, x, y + yoffset, color)
-  core.pop_clip_rect()
+  self.root_view.window:pop_clip_rect()
   return self:get_line_height()
 end
 

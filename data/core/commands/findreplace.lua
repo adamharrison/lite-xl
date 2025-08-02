@@ -14,8 +14,8 @@ local find_regex = config.find_regex or false
 local found_expression
 
 local function doc()
-  local is_DocView = core.active_view:is(DocView) and not core.active_view:is(CommandView)
-  return is_DocView and core.active_view.doc or (last_view and last_view.doc)
+  local is_DocView = core.active_window().active_view:is(DocView) and not core.active_window().active_view:is(CommandView)
+  return is_DocView and core.active_window().active_view.doc or (last_view and last_view.doc)
 end
 
 local function get_find_tooltip()
@@ -56,8 +56,8 @@ end
 
 
 local function find(label, search_fn)
-  last_view, last_sel = core.active_view,
-    { core.active_view.doc:get_selection() }
+  last_view, last_sel = core.active_window().active_view,
+    { core.active_window().active_view.doc:get_selection() }
   local text = last_view.doc:get_text(table.unpack(last_sel))
   found_expression = false
 
@@ -134,7 +134,7 @@ local function replace(kind, default, fn)
 end
 
 local function has_selection()
-  return core.active_view:is(DocView) and core.active_view.doc:has_selection()
+  return core.active_window().active_view:is(DocView) and core.active_window().active_view.doc:has_selection()
 end
 
 local function has_unique_selection()
@@ -176,7 +176,7 @@ local function select_add_next(all)
       if l2 and not is_in_any_selection(l2, c2) then
         doc():add_selection(l2, c2, l1, c1)
         if not all then
-          core.active_view:scroll_to_make_visible(l2, c2)
+          core.active_window().active_view:scroll_to_make_visible(l2, c2)
           return
         end
       end
@@ -257,10 +257,10 @@ command.add("core.docview!", {
 
 local function valid_for_finding()
   -- Allow using this while in the CommandView
-  if core.active_view:is(CommandView) and last_view then
+  if core.active_window().active_view:is(CommandView) and last_view then
     return true, last_view
   end
-  return core.active_view:is(DocView), core.active_view
+  return core.active_window().active_view:is(DocView), core.active_window().active_view
 end
 
 command.add(valid_for_finding, {

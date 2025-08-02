@@ -3,6 +3,7 @@ local common = require "core.common"
 local command = require "core.command"
 local keymap = require "core.keymap"
 local LogView = require "core.logview"
+local Window = require "core.window"
 
 
 local fullscreen = false
@@ -144,7 +145,6 @@ command.add(nil, {
     local status, err = pcall(function()
       node:add_view(LogView(core.active_window()))
     end)
-    print("ERR", err)
   end,
 
   ["core:open-user-module"] = function()
@@ -160,6 +160,13 @@ command.add(nil, {
     local doc = core.open_doc(".lite_project.lua")
     core.active_window():open_doc(doc)
     doc:save()
+  end,
+  
+  ["core:new-window"] = function()
+    local window = Window(renwindow.create(""))
+    core.add_window(window)
+    window:configure_borderless_window(core.windows[1].borderless)
+    window.renwindow:set_size(core.windows[1].renwindow:get_size())
   end,
 
   ["core:change-project-folder"] = function()
