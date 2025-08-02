@@ -13,9 +13,10 @@ local RootView = View:extend()
 
 function RootView:__tostring() return "RootView" end
 
-function RootView:new()
+function RootView:new(window)
   RootView.super.new(self)
-  self.root_node = Node()
+  self.window = window
+  self.root_node = Node(self)
   self.deferred_draws = {}
   self.mouse = { x = 0, y = 0 }
   self.drag_overlay = { x = 0, y = 0, w = 0, h = 0, visible = false, opacity = 0,
@@ -40,7 +41,7 @@ end
 
 ---@return core.node
 function RootView:get_active_node()
-  local node = self.root_node:get_node_for_view(core.active_view)
+  local node = self.root_node:get_node_for_view(self.window.active_view)
   if not node then node = self:get_primary_node() end
   return node
 end
@@ -57,14 +58,15 @@ local function get_primary_node(node)
 end
 
 
+
 ---@return core.node
 function RootView:get_active_node_default()
-  local node = self.root_node:get_node_for_view(core.active_view)
+  local node = self.root_node:get_node_for_view(self.window.active_view)
   if not node then node = self:get_primary_node() end
   if node.locked then
     local default_view = self:get_primary_node().views[1]
     assert(default_view, "internal error: cannot find original document node.")
-    core.set_active_view(default_view)
+    self.window:set_active_view(default_view)
     node = self:get_active_node()
   end
   return node
@@ -115,6 +117,9 @@ function RootView:open_doc(doc)
   return view
 end
 
+function RootView:set_active_view(view)
+  self.window:set_active_view(view)
+end
 
 ---@param keep_active boolean
 function RootView:close_all_docviews(keep_active)
@@ -190,7 +195,7 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
       return true
     end
   elseif not self.dragged_node then -- avoid sending on_mouse_pressed events when dragging tabs
-    core.set_active_view(node.active_view)
+    self.window:set_active_view(node.active_view)
     self:grab_mouse(button, node.active_view)
     return self.on_view_mouse_pressed(button, x, y, clicks) or node.active_view:on_mouse_pressed(button, x, y, clicks)
   end
@@ -307,9 +312,9 @@ function RootView:on_mouse_moved(x, y, dx, dy)
     return
   end
 
-  if core.active_view == core.nag_view then
+  if self.window.active_view == self.window.nag_view then
     core.request_cursor("arrow")
-    core.active_view:on_mouse_moved(x, y, dx, dy)
+    self.window.active_view:on_mouse_moved(x, y, dx, dy)
     return
   end
 
@@ -392,9 +397,9 @@ function RootView:on_file_dropped(filename, x, y)
   else
     local ok, doc = core.try(core.open_doc, filename)
     if ok then
-      local node = core.root_view.root_node:get_child_overlapping_point(x, y)
+      local node = self.root_node:get_child_overlapping_point(x, y)
       node:set_active_view(node.active_view)
-      core.root_view:open_doc(doc)
+      self:open_doc(doc)
     end
   end
   return true
@@ -409,7 +414,7 @@ end
 
 
 function RootView:on_text_input(...)
-  core.active_view:on_text_input(...)
+  self.window.active_view:on_text_input(...)
 end
 
 function RootView:on_touch_pressed(x, y, ...)
@@ -423,8 +428,8 @@ end
 
 function RootView:on_touch_moved(x, y, dx, dy, ...)
   if not self.touched_view then return end
-  if core.active_view == core.nag_view then
-    core.active_view:on_touch_moved(x, y, dx, dy, ...)
+  if self.window.active_view == self.window.nag_view then
+    self.window.active_view:on_touch_moved(x, y, dx, dy, ...)
     return
   end
 
@@ -457,7 +462,7 @@ function RootView:on_touch_moved(x, y, dx, dy, ...)
 end
 
 function RootView:on_ime_text_editing(...)
-  core.active_view:on_ime_text_editing(...)
+  self.window.active_view:on_ime_text_editing(...)
 end
 
 function RootView:on_focus_lost(...)

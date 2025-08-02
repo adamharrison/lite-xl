@@ -50,8 +50,9 @@ local default_state = {
 }
 
 
-function CommandView:new()
+function CommandView:new(window)
   CommandView.super.new(self, SingleLineDoc())
+  self.window = window
   self.suggestion_idx = 1
   self.suggestions_offset = 1
   self.suggestions = {}
@@ -238,7 +239,7 @@ function CommandView:enter(label, ...)
   -- self:set_text(self.state.text, self.state.select_text)
   -- once old usage is removed
 
-  core.set_active_view(self)
+  self.root_view.window:set_active_view(self)
   self:update_suggestions()
   self.gutter_text_brightness = 100
   self.label = label .. ": "
@@ -365,7 +366,7 @@ local function draw_suggestions_box(self)
   local h = math.ceil(self.suggestions_height)
   local rx, ry, rw, rh = self.position.x, self.position.y - h - dh, self.size.x, h
 
-  core.push_clip_rect(rx, ry, rw, rh)
+  self.window:push_clip_rect(rx, ry, rw, rh)
   -- draw suggestions background
   if #self.suggestions > 0 then
     renderer.draw_rect(rx, ry, rw, rh, style.background3)
@@ -388,14 +389,14 @@ local function draw_suggestions_box(self)
       common.draw_text(self:get_font(), style.dim, item.info, "right", x, y, w, lh)
     end
   end
-  core.pop_clip_rect()
+  self.window:pop_clip_rect()
 end
 
 
 function CommandView:draw()
   CommandView.super.draw(self)
   if self.state.show_suggestions then
-    core.root_view:defer_draw(draw_suggestions_box, self)
+    self.window.root_view:defer_draw(draw_suggestions_box, self)
   end
 end
 

@@ -309,14 +309,14 @@ function TreeView:update()
   -- this will make sure hovered_item is updated
   local dy = math.abs(self.last_scroll_y - self.scroll.y)
   if dy > 0 then
-    self:on_mouse_moved(core.root_view.mouse.x, core.root_view.mouse.y, 0, 0)
+    self:on_mouse_moved(self.root_view.mouse.x, self.root_view.mouse.y, 0, 0)
     self.last_scroll_y = self.scroll.y
   end
 
   local config = config.plugins.treeview
   if config.highlight_focused_file then
     -- Try to only highlight when we actually change tabs
-    local current_node = core.root_view:get_active_node()
+    local current_node = self.root_view:get_active_node()
     local current_active_view = core.active_view
     if current_node and not current_node.locked
      and current_active_view ~= self and current_active_view ~= self.last_active_view then
@@ -349,7 +349,7 @@ function TreeView:draw_tooltip()
   local x, y = self.tooltip.x + tooltip_offset, self.tooltip.y + tooltip_offset
   w, h = w + style.padding.x, h + style.padding.y
 
-  if x + w > core.root_view.root_node.size.x then -- check if we can span right
+  if x + w > self.root_view.root_node.size.x then -- check if we can span right
     x = x - w -- span left instead
   end
 
@@ -455,7 +455,7 @@ function TreeView:draw()
 
   self:draw_scrollbar()
   if self.hovered_item and self.tooltip.x and self.tooltip.alpha > 0 then
-    core.root_view:defer_draw(self.draw_tooltip, self)
+    self.root_view:defer_draw(self.draw_tooltip, self)
   end
 end
 
@@ -523,12 +523,12 @@ function TreeView:toggle_expand(toggle, item)
 end
 
 function TreeView:open_doc(filename)
-  core.root_view:open_doc(core.open_doc(filename))
+  self.root_view:open_doc(core.open_doc(filename))
 end
 
 -- init
 local view = TreeView()
-local node = core.root_view:get_active_node()
+local node = core.windows[1].root_view:get_active_node()
 view.node = node:split("left", view, {x = true}, true)
 
 -- The toolbarview plugin is special because it is plugged inside
@@ -687,7 +687,7 @@ command.add(nil, {
         previous_view = core.active_view
       end
       if not previous_view then
-        previous_view = core.root_view:get_primary_node().active_view
+        previous_view = self.root_view:get_primary_node().active_view
       end
       core.set_active_view(view)
       if not view.selected_item then
@@ -699,7 +699,7 @@ command.add(nil, {
 
     else
       core.set_active_view(
-        previous_view or core.root_view:get_primary_node().active_view
+        previous_view or self.root_view:get_primary_node().active_view
       )
     end
   end
@@ -707,7 +707,7 @@ command.add(nil, {
 
 command.add(
   function()
-    return not menu.show_context_menu and core.active_view:extends(TreeView), TreeView
+    return not menu.show_context_menu and core.active_window().active_view:extends(TreeView), TreeView
   end, {
   ["treeview:next"] = function()
     local item, _, item_y = view:get_next(view.selected_item)
@@ -778,7 +778,7 @@ command.add(
 
   ["treeview-context:show"] = function()
     if view.hovered_item then
-      menu:show(core.root_view.mouse.x, core.root_view.mouse.y)
+      menu:show(self.root_view.mouse.x, self.root_view.mouse.y)
       return
     end
 
