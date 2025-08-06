@@ -840,15 +840,8 @@ function DocView:update()
     core.blink_timer = tb
   end
 
-  if self.deferred_invalidation then
-    local invalidation = self.deferred_invalidation
-    self.deferred_invalidation = nil
-    for i,v in ipairs(invalidation) do
-      self:invalidate_cache(table.unpack(v))
-    end
-  end
-
   self:update_ime_location()
+  self:flush_deferred_invalidations()
 
   DocView.super.update(self)
 end
@@ -1122,13 +1115,25 @@ function DocView:tokens_end_in_newline(line)
   return #dline >= 5 and self:get_token_text(dline[#dline - 4], dline[#dline - 3], dline[#dline - 2], dline[#dline - 1]):find("\n$")
 end
 
+function DocView:flush_deferred_invalidations()
+  if self.deferred_invalidation then
+    local invalidation = self.deferred_invalidation
+    self.deferred_invalidation = nil
+    for i,v in ipairs(invalidation) do
+      self:invalidate_cache(table.unpack(v))
+    end
+  end
+end
+
 -- returns the doc line and token offset associated with this line/vline.
 function DocView:retrieve_tokens(vline, line, visible)
-  if not self.deferred_invalidation then self.deferred_invalidation = {} end
+  self:flush_deferred_invalidations()
+  self.deferred_invalidation = {}
   -- tokenize up until we have the tokens required for the specified line or vline
   local original_vline = vline or line
   local minline, maxline = self:get_visible_virtual_line_range()
   local screen_visual_height = (maxline - minline) * 2
+  
   while ((vline and vline > #self.vcache) or (line and line > #self.dcache)) and #self.dcache < #self.doc.lines do
     local vlines = {}
     local prev_newline = self:previous_tokens_end_in_newline(#self.dcache)
