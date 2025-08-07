@@ -441,15 +441,15 @@ local function get_suggestions_rect(av)
   -- additional line to display total items
   max_items = max_items + 1
 
-  if max_width > core.root_view.size.x then
-    max_width = core.root_view.size.x
+  if max_width > av.root_view.size.x then
+    max_width = av.root_view.size.x
   end
   if max_width < 150 * SCALE then
     max_width = 150 * SCALE
   end
 
   -- if portion not visiable to right, reposition to DocView right margin
-  if x + max_width > core.root_view.size.x then
+  if x + max_width > av.root_view.size.x then
     x = (av.size.x + av.position.x) - max_width
   end
 
@@ -626,13 +626,13 @@ local function draw_suggestions_box(av)
 
     local color = (i == suggestions_idx) and style.accent or style.text
     -- Push clip to avoid that the suggestion text gets drawn over suggestion type/icon
-    core.push_clip_rect(rx + icon_l_padding + style.padding.x, y,
+    av.root_view.window:push_clip_rect(rx + icon_l_padding + style.padding.x, y,
                         rw - info_size - icon_l_padding - icon_r_padding - style.padding.x, lh)
     local x_adv = common.draw_text(
       font, color, s.text, "left",
       rx + icon_l_padding + style.padding.x, y, rw, lh
     )
-    core.pop_clip_rect()
+    av.root_view.window:pop_clip_rect()
     -- If the text wasn't fully visible, draw an ellipsis
     if x_adv > rx + rw - info_size - icon_r_padding then
       local ellipsis_size = font:get_width("…")
