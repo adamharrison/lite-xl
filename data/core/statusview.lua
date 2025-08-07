@@ -656,7 +656,7 @@ end
 ---Draw the tooltip of a given status bar item.
 ---@param item core.statusview.item
 function StatusView:draw_item_tooltip(item)
-  core.root_view:defer_draw(function()
+  self.root_view:defer_draw(function()
     local text = item.tooltip
     local w = style.font:get_width(text)
     local h = style.font:get_height()
@@ -1243,7 +1243,7 @@ function StatusView:draw()
       local font = type(config.stonks) == "table" and config.stonks.font or style.icon_font
       local icon = type(config.stonks) == "table" and config.stonks.icon or ( config.stonks and "g" or "h" )
       local xadv = renderer.draw_text(font, icon, gx, gy, gc)
-      local x2, y2 = core.root_view.size.x - (xadv - gx), core.root_view.size.y - font:get_height()
+      local x2, y2 = self.root_view.size.x - (xadv - gx), self.root_view.size.y - font:get_height()
       gx, gy = common.clamp(gx + dx, 0, x2), common.clamp(gy + dy, 0, y2)
       local odx, ody = dx, dy
       if gx <= 0 then dx = math.abs(dx) elseif gx >= x2 then dx = -math.abs(dx) end

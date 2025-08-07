@@ -109,8 +109,8 @@ function ResultsView:open_selected_result()
     return
   end
   core.try(function()
-    local dv = core.root_view:open_doc(core.open_doc(res.file))
-    core.root_view.root_node:update_layout()
+    local dv = self.root_view:open_doc(core.open_doc(res.file))
+    self.root_view.root_node:update_layout()
     dv.doc:set_selection(res.line, res.col)
     dv:scroll_to_line(res.line, false, true)
   end)
@@ -242,7 +242,7 @@ local function begin_search(path, text, fn)
     return
   end
   local rv = ResultsView(path, text, fn)
-  core.root_view:get_active_node_default():add_view(rv)
+  core.active_window().root_view:get_active_node_default():add_view(rv)
   return rv
 end
 

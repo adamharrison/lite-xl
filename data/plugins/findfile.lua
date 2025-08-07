@@ -52,10 +52,10 @@ command.add(nil, {
       end)
     end
     local original_files
-    root_view.window.command_view:enter("Open File From Project", {
+    root_view.command_view:enter("Open File From Project", {
       submit = function(text, item)
         text = item and item.text or text
-        core.root_view:open_doc(core.open_doc(common.home_expand(text)))
+        root_view:open_doc(core.open_doc(common.home_expand(text)))
         complete = true
       end,
       suggest = function(text)

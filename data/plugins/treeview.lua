@@ -641,14 +641,14 @@ command.add(nil, {
   ["treeview:toggle-focus"] = function(root_view)
     if not root_view.active_view:is(TreeView) then
       if root_view.active_view:is(CommandView) then
-        root_view.treeview.previous_view = root_view.window.last_active_view
+        root_view.treeview.previous_view = root_view.last_active_view
       else
         root_view.treeview.previous_view = root_view.active_view
       end
       if not root_view.treeview.previous_view then
         root_view.treeview.previous_view = root_view:get_primary_node().active_view
       end
-      root_view.window:set_active_view(view)
+      root_view:set_active_view(view)
       if not view.selected_item then
         for it, _, y in view:each_item() do
           view:set_selection(it, y)
@@ -656,7 +656,7 @@ command.add(nil, {
         end
       end
     else
-      root_view.window:set_active_view(
+      root_view:set_active_view(
         root_view.treeview.previous_view or root_view:get_primary_node().active_view
       )
     end
@@ -681,8 +681,8 @@ command.add(TreeView, {
       view:toggle_expand()
     else
       core.try(function()
-        if view.root_view.window.last_active_view and view.root_view.active_view == view then
-          view.root_view.window:set_active_view(view.root_view.window.last_active_view)
+        if view.root_view.last_active_view and view.root_view.active_view == view then
+          view.root_view:set_active_view(view.root_view.last_active_view)
         end
         view:open_doc(core.normalize_to_project_dir(item.abs_filename))
       end)
@@ -750,7 +750,7 @@ end, {
       { text = "Yes", default_yes = true },
       { text = "No", default_no = true }
     }
-    view.root_view.window.nag_view:show(
+    view.root_view.nag_view:show(
       string.format("Delete %s", file_type),
       string.format(
         "Are you sure you want to delete the %s?\n%s: %s",
@@ -781,7 +781,7 @@ end, {
   ["treeview:rename"] = function(view, item)
     local old_filename = core.normalize_to_project_dir(item.abs_filename)
     local old_abs_filename = item.abs_filename
-    view.root_view.window.command_view:enter("Rename", {
+    view.root_view.command_view:enter("Rename", {
       text = old_filename,
       submit = function(filename)
         local abs_filename = item.project:absolute_path(filename)
@@ -820,7 +820,7 @@ end, {
         text = item.project:normalize_path(common.dirname(item.abs_filename)) .. PATHSEP
       end
     end
-    view.root_view.window.command_view:enter("Filename", {
+    view.root_view.command_view:enter("Filename", {
       text = not is_project_folder(item) and item.filename .. PATHSEP or "",
       submit = function(filename)
         local doc_filename = item.project:absolute_path(filename)
@@ -845,7 +845,7 @@ end, {
         text = item.project:normalize_path(common.dirname(item.abs_filename)) .. PATHSEP
       end
     end
-    view.root_view.window.command_view:enter("Folder Name", {
+    view.root_view.command_view:enter("Folder Name", {
       text = not is_project_folder(item) and item.filename .. PATHSEP or "",
       submit = function(filename)
         local dir_path = item.project:absolute_path(filename)

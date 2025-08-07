@@ -28,7 +28,7 @@ local function set_scale(scale)
   -- save scroll positions
   local v_scrolls = {}
   local h_scrolls = {}
-  for _, view in ipairs(core.root_view.root_node:get_children()) do
+  for _, view in ipairs(core.active_window().root_view.root_node:get_children()) do
     local n = view:get_scrollable_size()
     if n ~= math.huge and n > view.size.y then
       v_scrolls[view] = view.scroll.y / (n - view.size.y)

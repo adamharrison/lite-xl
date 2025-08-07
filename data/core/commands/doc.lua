@@ -582,7 +582,7 @@ local commands = {
       text = core.normalize_to_project_dir(dirname) .. PATHSEP
       if text == core.root_project().path then text = "" end
     end
-    core.command_view:enter("Save As", {
+    dv.root_view.command_view:enter("Save As", {
       text = text,
       submit = function(filename)
         save(common.home_expand(filename))
@@ -634,8 +634,8 @@ local commands = {
       return
     end
     for i,docview in ipairs(core.get_views_referencing_doc(dv.doc)) do
-      local node = core.root_view.root_node:get_node_for_view(docview)
-      node:close_view(core.root_view.root_node, docview)
+      local node = dv.root_view.root_node:get_node_for_view(docview)
+      node:close_view(dv.root_view.root_node, docview)
     end
     os.remove(filename)
     core.log("Removed \"%s\"", filename)
