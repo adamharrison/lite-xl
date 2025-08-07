@@ -79,7 +79,7 @@ local function save_view(view)
   if mt == DocView then
     return {
       type = "doc",
-      active = (core.active_view == view),
+      active = (view.root_view.active_view == view),
       filename = view.doc.filename,
       selection = { view.doc:get_selection() },
       scroll = { x = view.scroll.to.x, y = view.scroll.to.y },
@@ -92,7 +92,7 @@ local function save_view(view)
     if mod == mt then
       return {
         type = "view",
-        active = (core.active_view == view),
+        active = (view.root_view.active_view == view),
         module = name,
         scroll = { x = view.scroll.to.x, y = view.scroll.to.y, to = { x = view.scroll.to.x, y = view.scroll.to.y } },
       }
@@ -213,7 +213,7 @@ local function load_workspace()
     local root = get_unlocked_root(core.windows[1].root_view.root_node)
     local active_view = load_node(root, workspace.documents)
     if active_view then
-      core.set_active_view(active_view)
+      core.active_window().root_view:set_active_view(active_view)
     end
     for i, dir_name in ipairs(workspace.directories) do
       core.add_project(system.absolute_path(dir_name))

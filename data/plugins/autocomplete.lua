@@ -128,6 +128,12 @@ config.plugins.autocomplete = common.merge({
   }
 }, config.plugins.autocomplete)
 
+local function get_active_view()
+  if core.active_window().root_view.active_view:is(DocView) then
+    return core.active_window().root_view.active_view
+  end
+end
+
 local autocomplete = {}
 
 autocomplete.map = {}
@@ -295,7 +301,7 @@ local function reset_suggestions()
 
   triggered_manually = false
 
-  local doc = core.active_view.doc
+  local doc = get_active_view().doc
   if autocomplete.on_close then
     autocomplete.on_close(doc, suggestions[suggestions_idx])
     autocomplete.on_close = nil
@@ -303,7 +309,7 @@ local function reset_suggestions()
 end
 
 local function update_suggestions()
-  local doc = core.active_view.doc
+  local doc = get_active_view().doc
   local filename = doc and doc.filename or ""
 
   local map = autocomplete.map
@@ -375,17 +381,12 @@ local function update_suggestions()
 end
 
 local function get_partial_symbol()
-  local doc = core.active_view.doc
+  local doc = get_active_view().doc
   local line2, col2 = doc:get_selection()
   local line1, col1 = doc:position_offset(line2, col2, translate.start_of_word)
   return doc:get_text(line1, col1, line2, col2)
 end
 
-local function get_active_view()
-  if core.active_window().active_view:is(DocView) then
-    return core.active_view
-  end
-end
 
 local last_max_width = 0
 local function get_suggestions_rect(av)
@@ -733,8 +734,8 @@ Doc.remove = function(self, line1, col1, line2, col2)
   end
 end
 
-RootView.update = function(...)
-  update(...)
+RootView.update = function(self, ...)
+  update(self, ...)
 
   local av = get_active_view()
   if av then
@@ -753,13 +754,13 @@ RootView.update = function(...)
   end
 end
 
-RootView.draw = function(...)
-  draw(...)
+RootView.draw = function(self, ...)
+  draw(self, ...)
 
   local av = get_active_view()
   if av then
     -- draw suggestions box after everything else
-    core.root_view:defer_draw(draw_suggestions_box, av)
+    self:defer_draw(draw_suggestions_box, av)
   end
 end
 

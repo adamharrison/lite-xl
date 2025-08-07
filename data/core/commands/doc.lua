@@ -9,7 +9,7 @@ local tokenizer = require "core.tokenizer"
 
 
 local function doc()
-  return core.active_window().active_view.doc
+  return core.active_window().root_view.active_view.doc
 end
 
 
@@ -573,12 +573,12 @@ local commands = {
   end,
 
   ["doc:save-as"] = function(dv)
-    local last_doc = core.last_active_view and core.last_active_view.doc
+    local last_doc = dv.root_view.last_active_view and dv.root_view.last_active_view.doc
     local text
     if dv.doc.filename then
       text = dv.doc.filename
     elseif last_doc and last_doc.filename then
-      local dirname, filename = core.last_active_view.doc.abs_filename:match("(.*)[/\\](.+)$")
+      local dirname, filename = dv.root_view.last_active_view.doc.abs_filename:match("(.*)[/\\](.+)$")
       text = core.normalize_to_project_dir(dirname) .. PATHSEP
       if text == core.root_project().path then text = "" end
     end
@@ -662,8 +662,8 @@ local commands = {
 }
 
 command.add(function(root_view, x, y)
-  if x == nil or y == nil or not core.active_window().active_view:extends(DocView) then return false end
-  local dv = core.active_window().active_view
+  if x == nil or y == nil or not root_view.active_view:extends(DocView) then return false end
+  local dv = root_view.active_view
   local x1,y1,x2,y2 = dv.position.x, dv.position.y, dv.position.x + dv.size.x, dv.position.y + dv.size.y
   return x >= x1 + dv:get_gutter_width() and x < x2 and y >= y1 and y < y2, dv, x, y
 end, {

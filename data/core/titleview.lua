@@ -108,7 +108,7 @@ end
 function TitleView:on_mouse_pressed(button, x, y, clicks)
   local caught = TitleView.super.on_mouse_pressed(self, button, x, y, clicks)
   if caught then return end
-  core.set_active_view(core.last_active_view)
+  self.root_view:set_active_view(self.root_view.last_active_view)
   if self.hovered_item then
     self.hovered_item.action()
   end

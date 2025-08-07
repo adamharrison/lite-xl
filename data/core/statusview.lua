@@ -163,8 +163,8 @@ StatusView.Item = StatusViewItem
 ---Predicated used on the default docview widgets.
 ---@return boolean
 local function predicate_docview(self, status_view)
-  return status_view.window.active_view:is(DocView)
-    and not status_view.window.active_view:is(CommandView)
+  return status_view.root_view.active_view:is(DocView)
+    and not status_view.root_view.active_view:is(CommandView)
 end
 
 
@@ -206,7 +206,7 @@ function StatusView:register_docview_items()
     name = "doc:file",
     alignment = StatusView.Item.LEFT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       return {
         dv.doc:is_dirty() and style.accent or style.text, style.icon_font, "f",
         style.dim, style.font, self.separator2, style.text,
@@ -220,7 +220,7 @@ function StatusView:register_docview_items()
     name = "doc:position",
     alignment = StatusView.Item.LEFT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       local line, col = dv.doc:get_selection()
       local _, indent_size = dv.doc:get_indent_info()
       -- Calculating tabs when the doc is using the "hard" indent type.
@@ -251,7 +251,7 @@ function StatusView:register_docview_items()
     name = "doc:position-percent",
     alignment = StatusView.Item.LEFT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       local line = dv.doc:get_selection()
       return {
         string.format("%.f%%", line / #dv.doc.lines * 100)
@@ -265,7 +265,7 @@ function StatusView:register_docview_items()
     name = "doc:selections",
     alignment = StatusView.Item.LEFT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       local nsel = math.floor(#dv.doc.selections / 4)
       if nsel > 1 then
         return { style.text, nsel, " selections" }
@@ -280,7 +280,7 @@ function StatusView:register_docview_items()
     name = "doc:indentation",
     alignment = StatusView.Item.RIGHT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       local indent_type, indent_size, indent_confirmed = dv.doc:get_indent_info()
       local indent_label = (indent_type == "hard") and "tabs: " or "spaces: "
       return {
@@ -325,7 +325,7 @@ function StatusView:register_docview_items()
     name = "doc:lines",
     alignment = StatusView.Item.RIGHT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       return {
         style.text, #dv.doc.lines, " lines",
       }
@@ -338,7 +338,7 @@ function StatusView:register_docview_items()
     name = "doc:line-ending",
     alignment = StatusView.Item.RIGHT,
     get_item = function()
-      local dv = self.root_view.window.active_view
+      local dv = self.root_view.active_view
       return {
         style.text, dv.doc.crlf and "CRLF" or "LF"
       }
@@ -352,7 +352,7 @@ function StatusView:register_docview_items()
     alignment = StatusView.Item.RIGHT,
     get_item = function()
       return {
-        style.text, self.root_view.window.active_view.doc.overwrite and "OVR" or "INS"
+        style.text, self.root_view.active_view.doc.overwrite and "OVR" or "INS"
       }
     end,
     command = "doc:toggle-overwrite",
@@ -1013,11 +1013,11 @@ end
 
 function StatusView:on_mouse_pressed(button, x, y, clicks)
   if not self.visible then return end
-  core.set_active_view(core.last_active_view)
+  self.root_view:set_active_view(self.root_view.last_active_view)
   if
     system.get_time() < self.message_timeout
     and
-    not self.root_view.window.active_view:is(LogView)
+    not self.root_view.active_view:is(LogView)
   then
     command.perform "core:open-log"
   else

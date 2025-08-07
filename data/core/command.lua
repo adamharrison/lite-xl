@@ -63,9 +63,9 @@ function command.generate_predicate(predicate)
   if type(predicate) == "table" then
     local class = predicate
     if not strict then
-      predicate = function(...) return core.active_window().active_view:extends(class), core.active_window().active_view, ... end
+      predicate = function(...) return core.active_window().root_view.active_view:extends(class), core.active_window().root_view.active_view, ... end
     else
-      predicate = function(...) return core.active_window().active_view:is(class), core.active_window().active_view, ... end
+      predicate = function(...) return core.active_window().root_view.active_view:is(class), core.active_window().root_view.active_view, ... end
     end
   end
   ---@cast predicate core.command.predicate_function

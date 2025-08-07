@@ -413,7 +413,7 @@ function DocView:update()
   local line1, col1, line2, col2 = self.doc:get_selection()
   if (line1 ~= self.last_line1 or col1 ~= self.last_col1 or
       line2 ~= self.last_line2 or col2 ~= self.last_col2) and self.size.x > 0 then
-    if self.root_view.window.active_view == self and not ime.editing then
+    if self.root_view.active_view == self and not ime.editing then
       self:scroll_to_make_visible(line1, col1)
     end
     core.blink_reset()
@@ -422,7 +422,7 @@ function DocView:update()
   end
 
   -- update blink timer
-  if self == self.root_view.window.active_view and not self.mouse_selecting then
+  if self == self.root_view.active_view and not self.mouse_selecting then
     local T, t0 = config.blink_period, core.blink_start
     local ta, tb = core.blink_timer, system.get_time()
     if ((tb - t0) % T < T / 2) ~= ((ta - t0) % T < T / 2) then
@@ -494,7 +494,7 @@ function DocView:draw_line_body(line, x, y)
       end
     end
   end
-  if draw_highlight and self.root_view.window.active_view == self then
+  if draw_highlight and self.root_view.active_view == self then
     self:draw_line_highlight(x + self.scroll.x, y)
   end
 
@@ -558,7 +558,7 @@ end
 
 
 function DocView:draw_overlay()
-  if self.root_view.window.active_view == self then
+  if self.root_view.active_view == self then
     local minline, maxline = self:get_visible_line_range()
     -- draw caret if it overlaps this line
     local T = config.blink_period
