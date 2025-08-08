@@ -8,7 +8,7 @@ local tokenizer = require "core.tokenizer"
 
 
 local function doc()
-  return core.active_view.doc
+  return core.active_window().root_view.active_view.doc
 end
 
 
@@ -24,7 +24,7 @@ local function save(filename)
     core.log("Saved \"%s\"", saved_filename)
   else
     core.error(err)
-    core.nag_view:show("Saving failed", string.format("Couldn't save file \"%s\". Do you want to save to another location?", doc().filename), {
+    core.active_window().root_view.nag_view:show("Saving failed", string.format("Couldn't save file \"%s\". Do you want to save to another location?", doc().filename), {
       { text = "Yes", default_yes = true },
       { text = "No", default_no = true }
     }, function(item)
@@ -45,16 +45,16 @@ local commands = {
   end,
 
   ["doc:save-as"] = function(dv)
-    local last_doc = core.last_active_view and core.last_active_view.doc
+    local last_doc = dv.root_view.last_active_view and dv.root_view.last_active_view.doc
     local text
     if dv.doc.filename then
       text = dv.doc.filename
     elseif last_doc and last_doc.filename then
-      local dirname, filename = core.last_active_view.doc.abs_filename:match("(.*)[/\\](.+)$")
+      local dirname, filename = dv.root_view.last_active_view.doc.abs_filename:match("(.*)[/\\](.+)$")
       text = core.normalize_to_project_dir(dirname) .. PATHSEP
       if text == core.root_project().path then text = "" end
     end
-    core.command_view:enter("Save As", {
+    dv.root_view.command_view:enter("Save As", {
       text = text,
       submit = function(filename)
         save(common.home_expand(filename))
@@ -83,7 +83,7 @@ local commands = {
       core.error("Cannot rename unsaved doc")
       return
     end
-    core.command_view:enter("Rename", {
+    dv.root_view.command_view:enter("Rename", {
       text = old_filename,
       submit = function(filename)
         save(common.home_expand(filename))
@@ -106,8 +106,8 @@ local commands = {
       return
     end
     for i,docview in ipairs(core.get_views_referencing_doc(dv.doc)) do
-      local node = core.root_view.root_node:get_node_for_view(docview)
-      node:close_view(core.root_view.root_node, docview)
+      local node = dv.root_view.root_node:get_node_for_view(docview)
+      node:close_view(dv.root_view.root_node, docview)
     end
     os.remove(filename)
     core.log("Removed \"%s\"", filename)

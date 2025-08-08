@@ -202,7 +202,7 @@ end
 --------------------------------------------------------------------------------
 -- Events listening
 --------------------------------------------------------------------------------
-function keymap.on_key_pressed(k, ...)
+function keymap.on_key_pressed(window, k, ...)
   local mk = modkey_map[k]
   if mk then
     keymap.modkeys[mk] = true
@@ -223,7 +223,7 @@ function keymap.on_key_pressed(k, ...)
             performed = true
           end
         else
-          performed = command.perform(cmd, ...)
+          performed = command.perform(cmd, window.root_view, ...)
         end
         if performed then break end
       end
@@ -233,43 +233,43 @@ function keymap.on_key_pressed(k, ...)
   return false
 end
 
-function keymap.on_mouse_wheel(delta_y, delta_x, ...)
+function keymap.on_mouse_wheel(window, delta_y, delta_x, ...)
   local y_direction = delta_y > 0 and "up" or "down"
   local x_direction = delta_x > 0 and "left" or "right"
   -- Try sending a "cumulative" event for both scroll directions
   if delta_y ~= 0 and delta_x ~= 0 then
-    local result = keymap.on_key_pressed("wheel" .. y_direction .. x_direction, delta_y, delta_x, ...)
+    local result = keymap.on_key_pressed(window, "wheel" .. y_direction .. x_direction, delta_y, delta_x, ...)
     if not result then
-      result = keymap.on_key_pressed("wheelyx", delta_y, delta_x, ...)
+      result = keymap.on_key_pressed(window, "wheelyx", delta_y, delta_x, ...)
     end
     if result then return true end
   end
   -- Otherwise send each direction as its own separate event
   local y_result, x_result
   if delta_y ~= 0 then
-    y_result = keymap.on_key_pressed("wheel" .. y_direction, delta_y, ...)
+    y_result = keymap.on_key_pressed(window, "wheel" .. y_direction, delta_y, ...)
     if not y_result then
-      y_result = keymap.on_key_pressed("wheel", delta_y, ...)
+      y_result = keymap.on_key_pressed(window, "wheel", delta_y, ...)
     end
   end
   if delta_x ~= 0 then
-    x_result = keymap.on_key_pressed("wheel" .. x_direction, delta_x, ...)
+    x_result = keymap.on_key_pressed(window, "wheel" .. x_direction, delta_x, ...)
     if not x_result then
-      x_result = keymap.on_key_pressed("hwheel", delta_x, ...)
+      x_result = keymap.on_key_pressed(window, "hwheel", delta_x, ...)
     end
   end
   return y_result or x_result
 end
 
-function keymap.on_mouse_pressed(button, x, y, clicks)
+function keymap.on_mouse_pressed(window, button, x, y, clicks)
   local click_number = (((clicks - 1) % config.max_clicks) + 1)
-  return not (keymap.on_key_pressed(click_number  .. button:sub(1,1) .. "click", x, y, clicks) or
-    keymap.on_key_pressed(button:sub(1,1) .. "click", x, y, clicks) or
-    keymap.on_key_pressed(click_number .. "click", x, y, clicks) or
-    keymap.on_key_pressed("click", x, y, clicks))
+  return not (keymap.on_key_pressed(window, click_number  .. button:sub(1,1) .. "click", x, y, clicks) or
+    keymap.on_key_pressed(window, button:sub(1,1) .. "click", x, y, clicks) or
+    keymap.on_key_pressed(window, click_number .. "click", x, y, clicks) or
+    keymap.on_key_pressed(window, "click", x, y, clicks))
 end
 
-function keymap.on_key_released(k)
+function keymap.on_key_released(window, k)
   local mk = modkey_map[k]
   if mk then
     keymap.modkeys[mk] = false
@@ -290,6 +290,7 @@ keymap.add_direct {
   ["ctrl+shift+p"] = "core:find-command",
   ["ctrl+o"] = "core:open-file",
   ["ctrl+n"] = "core:new-doc",
+  ["ctrl+shift+n"] = "core:new-window",
   ["ctrl+shift+c"] = "core:change-project-folder",
   ["ctrl+shift+o"] = "core:open-project-folder",
   ["ctrl+alt+r"] = "core:restart",
@@ -343,7 +344,7 @@ keymap.add_direct {
   ["insert"] = "docview:toggle-overwrite",
   ["ctrl+insert"] = "docview:copy",
   ["shift+insert"] = "docview:paste",
-  ["escape"] = { "command:escape", "docview:select-none", "dialog:select-no" },
+  ["escape"] = { "command:escape", "docview:select-none", "context-menu:hide", "dialog:select-no" },
   ["tab"] = { "command:complete", "docview:indent" },
   ["shift+tab"] = "docview:unindent",
   ["backspace"] = "docview:backspace",
@@ -355,7 +356,7 @@ keymap.add_direct {
   ["ctrl+delete"] = "docview:delete-to-next-word-end",
   ["ctrl+shift+delete"] = "docview:delete-to-next-word-end",
   ["return"] = { "command:submit", "docview:newline", "dialog:select" },
-  ["keypad enter"] = { "command:submit", "docview:newline", "dialog:select" },
+  ["keypad enter"] = { "command:submit", "context-menu:submit", "docview:newline", "dialog:select" },
   ["ctrl+return"] = "docview:newline-below",
   ["ctrl+shift+return"] = "docview:newline-above",
   ["ctrl+j"] = "docview:join-lines",
@@ -374,8 +375,8 @@ keymap.add_direct {
 
   ["left"] = { "docview:move-to-previous-char", "dialog:previous-entry" },
   ["right"] = { "docview:move-to-next-char", "dialog:next-entry"},
-  ["up"] = { "command:select-previous", "docview:move-to-previous-line" },
-  ["down"] = { "command:select-next", "docview:move-to-next-line" },
+  ["up"] = { "command:select-previous", "context-menu:focus-previous", "docview:move-to-previous-line" },
+  ["down"] = { "command:select-next",  "context-menu:focus-next", "docview:move-to-next-line" },
   ["ctrl+left"] = "docview:move-to-previous-word-start",
   ["ctrl+right"] = "docview:move-to-next-word-end",
   ["ctrl+["] = "docview:move-to-previous-block-start",
@@ -389,7 +390,7 @@ keymap.add_direct {
 
   ["shift+1lclick"] = "docview:select-to-cursor",
   ["ctrl+1lclick"] = "docview:split-cursor",
-  ["1lclick"] = "docview:set-cursor",
+  ["1lclick"] =  { "context-menu:select", "context-menu:hide", "doc:set-cursor" },
   ["2lclick"] = { "docview:set-cursor-word", "emptyview:new-doc", "tabbar:new-doc" },
   ["3lclick"] = "docview:set-cursor-line",
   ["mclick"] = "docview:paste-primary-selection",

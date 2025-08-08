@@ -158,24 +158,24 @@ function DocView:tokenize(line, visible)
   return tokens
 end
 
-command.add(nil, {
-  ["line-wrapping:enable"] = function()
-    if core.active_view and core.active_view.doc then
-      core.active_view.wrapping = true
-      core.active_view:invalidate_cache()
+command.add(DocView, {
+  ["line-wrapping:enable"] = function(dv)
+    if dv.doc then
+      root_view.active_view.wrapping = true
+      root_view.active_view:invalidate_cache()
     end
   end,
-  ["line-wrapping:disable"] = function()
-    if core.active_view and core.active_view.doc then
-      core.active_view.wrapping = false
-      core.active_view:invalidate_cache()
+  ["line-wrapping:disable"] = function(dv)
+    if dv.doc then
+      root_view.active_view.wrapping = false
+      root_view.active_view:invalidate_cache()
     end
   end,
-  ["line-wrapping:toggle"] = function()
-    if core.active_view and core.active_view.doc and core.active_view.wrapping then
-      command.perform("line-wrapping:disable")
+  ["line-wrapping:toggle"] = function(dv)
+    if dv.doc and dv.wrapping then
+      command.perform("line-wrapping:disable", dv)
     else
-      command.perform("line-wrapping:enable")
+      command.perform("line-wrapping:enable", dv)
     end
   end
 })
