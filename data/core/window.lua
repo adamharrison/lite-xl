@@ -107,16 +107,16 @@ function Window:on_event(type, ...)
     -- In some cases during IME composition input is still sent to us
     -- so we just ignore it.
     if ime.editing then return false end
-    did_keymap = keymap.on_key_pressed(...)
+    did_keymap = keymap.on_key_pressed(self, ...)
   elseif type == "keyreleased" then
-    keymap.on_key_released(...)
+    keymap.on_key_released(self, ...)
   elseif type == "mousemoved" then
     local x1, y1, x2, y2 = ...
     self.root_view:on_mouse_moved(x1 * self.scale.x, y1 * self.scale.y, x2 * self.scale.x, y2 * self.scale.y)
   elseif type == "mousepressed" then
     local bname, x, y, clicks = ...
     if not self.root_view:on_mouse_pressed(bname, x * self.scale.x, y * self.scale.y, clicks) then
-      did_keymap = keymap.on_mouse_pressed(bname, x * self.scale.x, y * self.scale.y, clicks)
+      did_keymap = keymap.on_mouse_pressed(self, bname, x * self.scale.x, y * self.scale.y, clicks)
     end
   elseif type == "mousereleased" then
     local bname, x, y = ...
@@ -125,7 +125,7 @@ function Window:on_event(type, ...)
     self.root_view:on_mouse_left()
   elseif type == "mousewheel" then
     if not self.root_view:on_mouse_wheel(...) then
-      did_keymap = keymap.on_mouse_wheel(...)
+      did_keymap = keymap.on_mouse_wheel(self, ...)
     end
   elseif type == "touchpressed" then
     self.root_view:on_touch_pressed(...)
