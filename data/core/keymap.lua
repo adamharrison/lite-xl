@@ -390,7 +390,7 @@ keymap.add_direct {
 
   ["shift+1lclick"] = "docview:select-to-cursor",
   ["ctrl+1lclick"] = "docview:split-cursor",
-  ["1lclick"] =  { "context-menu:select", "context-menu:hide", "doc:set-cursor" },
+  ["1lclick"] =  { "context-menu:select", "context-menu:hide", "docview:set-cursor" },
   ["2lclick"] = { "docview:set-cursor-word", "emptyview:new-doc", "tabbar:new-doc" },
   ["3lclick"] = "docview:set-cursor-line",
   ["mclick"] = "docview:paste-primary-selection",

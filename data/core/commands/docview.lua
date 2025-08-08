@@ -93,7 +93,7 @@ local function set_cursor(dv, x, y, snap_type)
   local line, col = dv:resolve_screen_position(x, y)
   dv:set_selection(line, col, line, col)
   if snap_type == "word" or snap_type == "lines" then
-    command.perform("docview:select-" .. snap_type)
+    command.perform("docview:select-" .. snap_type, dv.root_view)
   end
   dv.mouse_selecting = { line, col, snap_type }
   core.blink_reset()
