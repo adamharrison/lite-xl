@@ -524,7 +524,7 @@ end
 function core.restart()
   core.exit(function()
     core.restart_request = true
-    core.active_window():_persist()
+    core.active_window().renwindow:_persist()
   end)
 end
 

@@ -758,7 +758,7 @@ RootView.draw = function(self, ...)
   draw(self, ...)
 
   local av = get_active_view()
-  if av then
+  if av and av.root_view == self then
     -- draw suggestions box after everything else
     self:defer_draw(draw_suggestions_box, av)
   end
