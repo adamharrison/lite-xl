@@ -4,8 +4,8 @@ local common = require "core.common"
 local style = require "core.style"
 local StatusView = require "core.statusview"
 
-local function status_view_item_names()
-  local items = core.status_view:get_items_list()
+local function status_view_item_names(status_view)
+  local items = status_view:get_items_list()
   local names = {}
   for _, item in ipairs(items) do
     table.insert(names, item.name)
@@ -13,10 +13,10 @@ local function status_view_item_names()
   return names
 end
 
-local function status_view_items_data(names)
+local function status_view_items_data(status_view, names)
   local data = {}
   for _, name in ipairs(names) do
-    local item = core.status_view:get_item(name)
+    local item = status_view:get_item(name)
     table.insert(data, {
       text = command.prettify_name(item.name),
       info = item.alignment == StatusView.Item.LEFT and "Left" or "Right",
@@ -26,10 +26,10 @@ local function status_view_items_data(names)
   return data
 end
 
-local function status_view_get_items(text)
-  local names = status_view_item_names()
+local function status_view_get_items(status_view, text)
+  local names = status_view_item_names(status_view)
   local results = common.fuzzy_match(names, text)
-  results = status_view_items_data(results)
+  results = status_view_items_data(status_view, results)
   return results
 end
 
@@ -54,7 +54,7 @@ command.add(nil, {
       submit = function(text, item)
         root_view.status_view:hide_items(item.name)
       end,
-      suggest = status_view_get_items
+      suggest = function(...) return status_view_get_items(root_view.status_view, ...) end
     })
   end,
   ["status-bar:show-item"] = function(root_view)
@@ -62,7 +62,7 @@ command.add(nil, {
       submit = function(text, item)
         root_view.status_view:show_items(item.name)
       end,
-      suggest = status_view_get_items
+      suggest = function(...) return status_view_get_items(root_view.status_view, ...) end
     })
   end,
   ["status-bar:reset-items"] = function(root_view)

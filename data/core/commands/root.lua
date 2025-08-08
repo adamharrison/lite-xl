@@ -31,18 +31,18 @@ local t = {
   end,
 
   ["root:move-tab-left"] = function(node)
-    local idx = node:get_view_idx(core.active_view)
+    local idx = node:get_view_idx(node.root_view.active_view)
     if idx > 1 then
       table.remove(node.views, idx)
-      table.insert(node.views, idx - 1, core.active_view)
+      table.insert(node.views, idx - 1, node.root_view.active_view)
     end
   end,
 
   ["root:move-tab-right"] = function(node)
-    local idx = node:get_view_idx(core.active_view)
+    local idx = node:get_view_idx(node.root_view.active_view)
     if idx < #node.views then
       table.remove(node.views, idx)
-      table.insert(node.views, idx + 1, core.active_view)
+      table.insert(node.views, idx + 1, node.root_view.active_view)
     end
   end,
 

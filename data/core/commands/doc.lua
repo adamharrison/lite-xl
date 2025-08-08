@@ -43,7 +43,7 @@ local function save(filename)
     core.log("Saved \"%s\"", saved_filename)
   else
     core.error(err)
-    core.nag_view:show("Saving failed", string.format("Couldn't save file \"%s\". Do you want to save to another location?", doc().filename), {
+    core.active_window().root_view.nag_view:show("Saving failed", string.format("Couldn't save file \"%s\". Do you want to save to another location?", doc().filename), {
       { text = "Yes", default_yes = true },
       { text = "No", default_no = true }
     }, function(item)
@@ -611,7 +611,7 @@ local commands = {
       core.error("Cannot rename unsaved doc")
       return
     end
-    core.command_view:enter("Rename", {
+    dv.root_view.command_view:enter("Rename", {
       text = old_filename,
       submit = function(filename)
         save(common.home_expand(filename))

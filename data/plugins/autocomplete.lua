@@ -223,7 +223,7 @@ core.add_thread(function()
             else
               filename_message = "unnamed document"
             end
-            core.status_view:show_message("!", style.accent,
+            core.active_window().status_view:show_message("!", style.accent,
               "Too many symbols in "..filename_message..
               ": stopping auto-complete for this document according to "..
               "config.plugins.autocomplete.max_symbols."

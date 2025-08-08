@@ -42,7 +42,7 @@ end
 function ToolbarView:toggle_visible()
   self.visible = not self.visible
   if self.tooltip then
-    core.status_view:remove_tooltip()
+    self.root_view.status_view:remove_tooltip()
     self.tooltip = false
   end
   self.hovered_item = nil
@@ -105,7 +105,7 @@ end
 function ToolbarView:on_mouse_left()
   ToolbarView.super.on_mouse_left(self)
   if self.tooltip then
-    core.status_view:remove_tooltip()
+    self.root_view.status_view:remove_tooltip()
     self.tooltip = false
   end
   self.hovered_item = nil
@@ -124,13 +124,13 @@ function ToolbarView:on_mouse_moved(px, py, ...)
       self.hovered_item = item
       local binding = keymap.get_binding(item.command)
       local name = command.prettify_name(item.command)
-      core.status_view:show_tooltip(binding and { name, style.dim, "  ", binding } or { name })
+      self.root_view.status_view:show_tooltip(binding and { name, style.dim, "  ", binding } or { name })
       self.tooltip = true
       return
     end
   end
   if self.tooltip and not (px > x_min and px <= x_max and py > y_min and py <= y_max) then
-    core.status_view:remove_tooltip()
+    self.root_view.status_view:remove_tooltip()
     self.tooltip = false
   end
 end

@@ -439,7 +439,7 @@ function core.init()
         msg[#msg + 1] = string.format("Plugins from directory \"%s\":\n%s", common.home_encode(entry.dir), table.concat(msg_list, "\n"))
       end
     end
-    core.nag_view:show(
+    core.active_window().root_view.nag_view:show(
       "Refused Plugins",
       string.format(
         "Some plugins are not loaded due to version mismatch. Expected version %s.\n\n%s.\n\n" ..
@@ -772,8 +772,8 @@ function core.custom_log(level, show, backtrace, fmt, ...)
   local text = string.format(fmt, ...)
   if show then
     local s = style.log[level]
-    if core.status_view then
-      core.status_view:show_message(s.icon, s.color, text)
+    if core.active_window().root_view.status_view then
+      core.active_window().root_view.status_view:show_message(s.icon, s.color, text)
     end
   end
 
