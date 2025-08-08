@@ -358,11 +358,11 @@ function DocView:on_mouse_pressed(button, x, y, clicks)
   return false
 end
 
-command.add(function()
-  if not core.active_view:extends(DocView) or not core.active_view:get_folding_blocks() then return false end 
-  local vline = core.active_view:get_vline(core.active_view:get_selection())
-  local line = core.active_view:get_dline(vline, 1)
-  return core.active_view:is_foldable(line), core.active_view
+command.add(function(root_view)
+  if not root_view.active_view:extends(DocView) or not root_view.active_view:get_folding_blocks() then return false end 
+  local vline = root_view.active_view:get_vline(root_view.active_view:get_selection())
+  local line = root_view.active_view:get_dline(vline, 1)
+  return root_view.active_view:is_foldable(line), root_view.active_view
 end, {
   ["codefolding:toggle"] = function(dv)
     local line = dv:get_selection()
@@ -381,10 +381,10 @@ end, {
     dv:toggle_fold(line, false)
   end
 })
-command.add(function()
-   if not core.active_view:extends(DocView) then return false end 
-   local line = core.active_view:get_selection()
-   return core.active_view.expanded[line] ~= nil, core.active_view
+command.add(function(root_view)
+   if not root_view.active_view:extends(DocView) then return false end 
+   local line = root_view.active_view:get_selection()
+   return root_view.active_view.expanded[line] ~= nil, root_view.active_view
 end, {
   ["codefolding:expand"] = function(dv)
     local line = dv:get_selection()

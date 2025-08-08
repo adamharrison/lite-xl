@@ -879,9 +879,9 @@ end
 
 function DocView:draw_line(vline, x, y)
   local gw, gpad = self:get_gutter_width()
-  core.push_clip_rect(self.position.x + gw, self.position.y, self.size.x - gw, self.size.y)
+  self.root_view.window:push_clip_rect(self.position.x + gw, self.position.y, self.size.x - gw, self.size.y)
   self:draw_line_body(vline, x + gw - self.scroll.x, y)
-  core.pop_clip_rect()
+  self.root_view.window:pop_clip_rect()
   self:draw_line_gutter(vline, x, y, gpad and gw - gpad or gw)
   return self:get_line_height()
 end
@@ -968,21 +968,11 @@ function DocView:draw_ime_decoration(line1, col1, line2, col2)
 end
 
 function DocView:draw_overlay()
-<<<<<<< HEAD
-  if core.active_view == self then
+  if self.root_view.active_view == self then
     -- draw caret if it overlaps this line
     local T = config.blink_period
     for _, line1, col1, line2, col2 in self:get_selections() do
-      if system.window_has_focus(core.window) then
-=======
-  if self.root_view.active_view == self then
-    local minline, maxline = self:get_visible_line_range()
-    -- draw caret if it overlaps this line
-    local T = config.blink_period
-    for _, line1, col1, line2, col2 in self.doc:get_selections() do
-      if line1 >= minline and line1 <= maxline
-      and self.root_view.window.renwindow:has_focus() then
->>>>>>> PR/multi-windows-ipc
+      if self.root_view.window.renwindow:has_focus() then
         if ime.editing then
           self:draw_ime_decoration(line1, col1, line2, col2)
         else
@@ -1013,7 +1003,6 @@ function DocView:draw()
   local _, y = self:get_virtual_line_offset(minline)
 
 
-<<<<<<< HEAD
   for i = minline, math.min(maxline, self:get_total_vlines()) do
     y = y + (self:draw_line(i, self.position.x, y) or lh)
   end
@@ -1521,31 +1510,4 @@ function DocView:position_offset_byte(line, col, offset)
 end
 
 
-=======
-  local pos = self.position
-  x, y = self:get_line_screen_position(minline)
-  -- the clip below ensure we don't write on the gutter region. On the
-  -- right side it is redundant with the Node's clip.
-  self.root_view.window:push_clip_rect(pos.x + gw, pos.y, self.size.x - gw, self.size.y)
-  for i = minline, maxline do
-    y = y + (self:draw_line_body(i, x, y) or lh)
-  end
-  self:draw_overlay()
-  self.root_view.window:pop_clip_rect()
-
-  self:draw_scrollbar()
-end
-
-function DocView:on_context_menu()
-  return { items = {
-    { text = "Cut",     command = "doc:cut" },
-    { text = "Copy",    command = "doc:copy" },
-    { text = "Paste",   command = "doc:paste" },
-    ContextMenu.DIVIDER,
-    { text = "Find",    command = "find-replace:find"    },
-    { text = "Replace", command = "find-replace:replace" }
-  } }, self
-end
-
->>>>>>> PR/multi-windows-ipc
 return DocView

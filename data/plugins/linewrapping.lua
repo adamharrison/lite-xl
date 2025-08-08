@@ -90,7 +90,7 @@ function DocView:draw()
 
     local x, y = docview:get_content_offset()
     local gw = docview:get_gutter_width()
-    renderer.draw_rect(x + gw + width, y, 1, core.root_view.size.y, style.selection)
+    renderer.draw_rect(x + gw + width, y, 1, self.root_view.size.y, style.selection)
     new_width = width
   end
   if self.wrapping_width and self.wrapping_width ~= new_width then self:invalidate_cache() end
