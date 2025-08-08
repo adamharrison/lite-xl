@@ -365,9 +365,9 @@ function RootView:on_mouse_moved(x, y, dx, dy)
     return true
   end
 
-  if self.active_view == self.window.nag_view then
+  if self.active_view == self.nag_view then
     core.request_cursor("arrow")
-    self.active_view:on_mouse_moved(x, y, dx, dy)
+    self.nag_view:on_mouse_moved(x, y, dx, dy)
     return
   end
 

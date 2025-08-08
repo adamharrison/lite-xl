@@ -107,7 +107,7 @@ end
 
 function NagView:on_mouse_moved(mx, my, ...)
   if not self.visible then return end
-  self.root_view.set_active_view(self)
+  self.root_view:set_active_view(self)
   NagView.super.on_mouse_moved(self, mx, my, ...)
   for i, _, x,y,w,h in self:each_option() do
     if mx >= x and my >= y and mx < x + w and my < y + h then
@@ -158,7 +158,7 @@ function NagView:on_mouse_pressed(button, mx, my, clicks)
   for i, _, x,y,w,h in self:each_option() do
     if mx >= x and my >= y and mx < x + w and my < y + h then
       self:change_hovered(i)
-      command.perform "dialog:select"
+      command.perform("dialog:select", self.root_view)
     end
   end
   return true
@@ -293,7 +293,7 @@ function NagView:next()
     register_mouse_pressed(self)
   else
     self.force_focus = false
-    self.root_view:active_view(self.root_view.next_active_view or self.root_view.last_active_view)
+    self.root_view:set_active_view(self.root_view.next_active_view or self.root_view.last_active_view)
     self.visible = false
     unregister_mouse_pressed(self)
   end
