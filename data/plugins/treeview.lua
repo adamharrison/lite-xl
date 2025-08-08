@@ -584,7 +584,7 @@ core.add_thread(function()
     for _, window in ipairs(core.windows) do
       for k,v in pairs(window.root_view.treeview.watches) do
         v:check(function(directory)
-          view.cache[directory] = nil
+          window.root_view.treeview.cache[directory] = nil
         end)
       end
     end
