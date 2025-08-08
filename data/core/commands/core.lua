@@ -70,7 +70,7 @@ command.add(nil, {
     root_view.command_view:enter("Do Command", {
       submit = function(text, item)
         if item then
-          command.perform(item.command)
+          command.perform(item.command, root_view)
         end
       end,
       suggest = function(text)
@@ -141,10 +141,7 @@ command.add(nil, {
   end,
 
   ["core:open-log"] = function(root_view)
-    local node = root_view:get_active_node_default()
-    local status, err = pcall(function()
-      node:add_view(LogView(core.active_window()))
-    end)
+    root_view:get_active_node_default():add_view(LogView(root_view))
   end,
 
   ["core:open-user-module"] = function(root_view)

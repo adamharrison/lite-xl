@@ -373,23 +373,23 @@ command.add("core.docview", {
 })
 
 command.add(
-  function()
-    return core.active_window().root_view.active_view:is(DocView)
-      and cache[core.active_window().root_view.active_view.doc]
-      and cache[core.active_window().root_view.active_view.doc].type == "soft"
+  function(root_view)
+    return root_view.active_view:is(DocView)
+      and cache[root_view.active_view.doc]
+      and cache[root_view.active_view.doc].type == "soft"
   end, {
-  ["indent:switch-file-to-tabs-indentation"] = function()
-    set_indent_type(core.active_window().root_view.active_view.doc, "hard")
+  ["indent:switch-file-to-tabs-indentation"] = function(root_view)
+    set_indent_type(root_view.active_view.doc, "hard")
   end
 })
 
 command.add(
-  function()
-    return core.active_window().root_view.active_view:is(DocView)
-      and cache[core.active_window().root_view.active_view.doc]
-      and cache[core.active_window().root_view.active_view.doc].type == "hard"
+  function(root_view)
+    return root_view.active_view:is(DocView)
+      and cache[root_view.active_view.doc]
+      and cache[root_view.active_view.doc].type == "hard"
   end, {
-  ["indent:switch-file-to-spaces-indentation"] = function()
-    set_indent_type(core.active_window().root_view.active_view.doc, "soft")
+  ["indent:switch-file-to-spaces-indentation"] = function(root_view)
+    set_indent_type(root_view.active_view.doc, "soft")
   end
 })

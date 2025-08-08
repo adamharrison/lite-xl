@@ -544,7 +544,7 @@ local commands = {
       end
     end
 
-    core.command_view:enter("Go To Line", {
+    dv.root_view.command_view:enter("Go To Line", {
       submit = function(text, item)
         local line = item and item.line or tonumber(text)
         if not line then

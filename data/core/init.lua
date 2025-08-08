@@ -99,7 +99,9 @@ end
 
 function core.open_project(project)
   local project = core.set_project(project)
-  core.active_window():close_all_docviews()
+  for _, window in core.windows do
+    window:close_all_docviews()
+  end
   reload_customizations()
   update_recents_project("add", project.path)
 end

@@ -162,7 +162,7 @@ StatusView.Item = StatusViewItem
 
 ---Predicated used on the default docview widgets.
 ---@return boolean
-local function predicate_docview(self, status_view)
+local function predicate_docview(root_view, self, status_view)
   return status_view.root_view.active_view:is(DocView)
     and not status_view.root_view.active_view:is(CommandView)
 end
@@ -837,7 +837,7 @@ function StatusView:update_active_items()
   -- calculate left and right width
   for _, item in ipairs(combined_items) do
     item.cached_item = {}
-    if item.visible and item:predicate(self) then
+    if item.visible and item.predicate(self.root_view, item, self) then
       local styled_text = type(item.get_item) == "function"
         and item.get_item(item) or item.get_item
 
