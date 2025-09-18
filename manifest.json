@@ -8,6 +8,30 @@
             "aarch64-darwin"
           ],
           "checksum": "SKIP",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0-preview/lite-xl-v3.0-preview-x86_64-darwin-portable.zip"
+        },
+        {
+          "arch": "x86_64-linux",
+          "checksum": "SKIP",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0-preview/lite-xl-v3.0-preview-x86_64-linux-portable.zip"
+        },
+        {
+          "arch": "x86_64-windows",
+          "checksum": "SKIP",
+          "url": "https://github.com/adamharrison/lite-xl/releases/download/v3.0-preview/lite-xl-v3.0-preview-x86_64-windows-portable.zip"
+        }
+      ],
+      "mod_version": "4",
+      "version": "3.0-preview"
+    },
+    {
+      "files": [
+        {
+          "arch": [
+            "x86_64-darwin",
+            "aarch64-darwin"
+          ],
+          "checksum": "SKIP",
           "url": "https://github.com/lite-xl/lite-xl/releases/download/continuous/lite-xl-continuous-universal-darwin-portable.tar.gz"
         },
         {
