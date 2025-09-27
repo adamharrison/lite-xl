@@ -631,15 +631,7 @@ double ren_draw_text(RenSurface *rs, RenFont **fonts, const char *text, size_t l
   int clip_end_x = clip.x + clip.w, clip_end_y = clip.y + clip.h;
 
   RenFont* last = NULL;
-  double last_pen_x = x;
-  bool underline = fonts[0]->style & FONT_STYLE_UNDERLINE;
-  bool strikethrough = fonts[0]->style & FONT_STYLE_STRIKETHROUGH;
   // convert text in glyphs
-  hb_buffer_t *buf;
-  buf = hb_buffer_create();
-  hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-  hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-  hb_buffer_add_utf8(buf, text, len, 0, -1);
 
   while (text < end) {
     unsigned int codepoint, r, g, b;
@@ -707,19 +699,9 @@ double ren_draw_text(RenSurface *rs, RenFont **fonts, const char *text, size_t l
     float adv = font_get_xadvance(fonts[0], codepoint, metric, pen_x - original_pen_x, tab);
 
     if(!last) last = font;
-    else if(font != last || i == glyph_count - 1)  {
-      double local_pen_x = i == glyph_count - 1 ? pen_x + adv : pen_x;
-      if (underline)
-        ren_draw_rect(rs, (RenRect){last_pen_x, y / surface_scale + last->height - 1, (local_pen_x - last_pen_x) / surface_scale, last->underline_thickness * surface_scale}, color);
-      if (strikethrough)
-        ren_draw_rect(rs, (RenRect){last_pen_x, y / surface_scale + last->height / 2, (local_pen_x - last_pen_x) / surface_scale, last->underline_thickness * surface_scale}, color);
-      last = font;
-      last_pen_x = pen_x;
-    }
 
     pen_x += adv;
   }
-  hb_buffer_destroy(buf);
   return pen_x / surface_scale;
 }
 
