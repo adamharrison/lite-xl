@@ -1,4 +1,4 @@
--- mod-version:3
+-- mod-version:4
 local core = require "core"
 local command = require "core.command"
 local common = require "core.common"
@@ -266,7 +266,7 @@ local function detect_indent_stat(doc)
   local max_lines = auto_detect_max_lines
   for i, text in get_non_empty_lines(doc.syntax, doc.lines) do
     local spaces = text:match("^ +")
-    if spaces then table.insert(stat, spaces:len()) end
+    if spaces and #spaces > 1 then table.insert(stat, #spaces) end
     local tabs = text:match("^\t+")
     if tabs then tab_count = tab_count + 1 end
     -- if nothing found for first lines try at least 4 more times
@@ -325,7 +325,7 @@ local function set_indent_type(doc, type)
 end
 
 local function set_indent_type_command(dv)
-  core.command_view:enter("Specify indent style for this file", {
+  dv.root_view.command_view:enter("Specify indent style for this file", {
     submit = function(value)
       local doc = dv.doc
       value = value:lower()
@@ -353,7 +353,7 @@ local function set_indent_size(doc, size)
 end
 
 local function set_indent_size_command(dv)
-  core.command_view:enter("Specify indent size for current file", {
+  dv.command_view:enter("Specify indent size for current file", {
     submit = function(value)
       value = math.floor(tonumber(value))
       local doc = dv.doc
@@ -373,23 +373,23 @@ command.add("core.docview", {
 })
 
 command.add(
-  function()
-    return core.active_view:is(DocView)
-      and cache[core.active_view.doc]
-      and cache[core.active_view.doc].type == "soft"
+  function(root_view)
+    return root_view.active_view:is(DocView)
+      and cache[root_view.active_view.doc]
+      and cache[root_view.active_view.doc].type == "soft"
   end, {
-  ["indent:switch-file-to-tabs-indentation"] = function()
-    set_indent_type(core.active_view.doc, "hard")
+  ["indent:switch-file-to-tabs-indentation"] = function(root_view)
+    set_indent_type(root_view.active_view.doc, "hard")
   end
 })
 
 command.add(
-  function()
-    return core.active_view:is(DocView)
-      and cache[core.active_view.doc]
-      and cache[core.active_view.doc].type == "hard"
+  function(root_view)
+    return root_view.active_view:is(DocView)
+      and cache[root_view.active_view.doc]
+      and cache[root_view.active_view.doc].type == "hard"
   end, {
-  ["indent:switch-file-to-spaces-indentation"] = function()
-    set_indent_type(core.active_view.doc, "soft")
+  ["indent:switch-file-to-spaces-indentation"] = function(root_view)
+    set_indent_type(root_view.active_view.doc, "soft")
   end
 })

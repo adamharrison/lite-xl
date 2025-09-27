@@ -3,7 +3,13 @@ local common = require "core.common"
 local style = require "core.style"
 local Node = require "core.node"
 local View = require "core.view"
+local ime = require "core.ime"
 local DocView = require "core.docview"
+local ContextMenu = require "core.contextmenu"
+local CommandView = require "core.commandview"
+local StatusView = require "core.statusview"
+local NagView = require "core.nagview"
+local TitleView = require "core.titleview"
 
 ---@class core.rootview : core.view
 ---@field super core.view
@@ -11,9 +17,12 @@ local DocView = require "core.docview"
 ---@field mouse core.view.position
 local RootView = View:extend()
 
-function RootView:new()
+function RootView:__tostring() return "RootView" end
+
+function RootView:new(window)
   RootView.super.new(self)
-  self.root_node = Node()
+  self.window = window
+  self.root_node = Node(self)
   self.deferred_draws = {}
   self.mouse = { x = 0, y = 0 }
   self.drag_overlay = { x = 0, y = 0, w = 0, h = 0, visible = false, opacity = 0,
@@ -27,6 +36,32 @@ function RootView:new()
   self.grab = nil -- = {view = nil, button = nil}
   self.overlapping_view = nil
   self.touched_view = nil
+  self.defer_open_docs = {}
+  self.first_dnd_processed = false
+  self.first_update_done = false
+  self.context_menu = ContextMenu()
+  self.active_view = nil
+  self.last_active_view = nil
+  ---@type core.contextmenu
+  self.context_menu = ContextMenu(self)
+  ---@type core.commandview
+  self.command_view = CommandView(self)
+  ---@type core.statusview
+  self.status_view = StatusView(self)
+  ---@type core.nagview
+  self.nag_view = NagView(self)
+  ---@type core.titleview
+  self.title_view = TitleView(self)
+  
+  -- Some plugins (eg: console) require the nodes to be initialized to defaults
+  local cur_node = self.root_node
+  cur_node.is_primary_node = true
+  cur_node:split("up", self.title_view, {y = true})
+  cur_node = cur_node.b
+  cur_node:split("up", self.nag_view, {y = true})
+  cur_node = cur_node.b
+  cur_node = cur_node:split("down", self.command_view, {y = true})
+  cur_node = cur_node:split("down", self.status_view, {y = true})
 end
 
 
@@ -37,7 +72,7 @@ end
 
 ---@return core.node
 function RootView:get_active_node()
-  local node = self.root_node:get_node_for_view(core.active_view)
+  local node = self.root_node:get_node_for_view(self.window.active_view)
   if not node then node = self:get_primary_node() end
   return node
 end
@@ -54,14 +89,15 @@ local function get_primary_node(node)
 end
 
 
+
 ---@return core.node
 function RootView:get_active_node_default()
-  local node = self.root_node:get_node_for_view(core.active_view)
+  local node = self.root_node:get_node_for_view(self.window.active_view)
   if not node then node = self:get_primary_node() end
   if node.locked then
     local default_view = self:get_primary_node().views[1]
     assert(default_view, "internal error: cannot find original document node.")
-    core.set_active_view(default_view)
+    self.window:set_active_view(default_view)
     node = self:get_active_node()
   end
   return node
@@ -108,10 +144,28 @@ function RootView:open_doc(doc)
   local view = DocView(doc)
   node:add_view(view)
   self.root_node:update_layout()
-  view:scroll_to_line(view.doc:get_selection(), true, true)
+  view:scroll_to_line(view:get_selection(), true, true)
   return view
 end
 
+function RootView:set_active_view(view)
+  assert(view, "Tried to set active view to nil")
+  -- Reset the IME even if the focus didn't change
+  ime.stop()
+  if view ~= self.active_view then
+    system.text_input(self.window.renwindow, view:supports_text_input())
+    if self.active_view and self.active_view.force_focus then
+      self.next_active_view = view
+      return
+    end
+    self.next_active_view = nil
+    if view.doc and view.doc.filename then
+      core.set_visited(view.doc.filename)
+    end
+    self.last_active_view = self.active_view
+    self.active_view = view
+  end
+end
 
 ---@param keep_active boolean
 function RootView:close_all_docviews(keep_active)
@@ -150,7 +204,7 @@ end
 ---@param x number
 ---@param y number
 ---@param clicks integer
-function RootView.on_view_mouse_pressed(button, x, y, clicks)
+function RootView:on_view_mouse_pressed(button, x, y, clicks)
 end
 
 
@@ -163,6 +217,9 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
   -- If there is a grab, release it first
   if self.grab then
     self:on_mouse_released(self.grab.button, x, y)
+  end
+  if self.context_menu:on_mouse_pressed(button, x, y, clicks) then
+    return true
   end
   local div = self.root_node:get_divider_overlapping_point(x, y)
   local node = self.root_node:get_child_overlapping_point(x, y)
@@ -187,7 +244,7 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
       return true
     end
   elseif not self.dragged_node then -- avoid sending on_mouse_pressed events when dragging tabs
-    core.set_active_view(node.active_view)
+    self:set_active_view(node.active_view)
     self:grab_mouse(button, node.active_view)
     return self.on_view_mouse_pressed(button, x, y, clicks) or node.active_view:on_mouse_pressed(button, x, y, clicks)
   end
@@ -235,7 +292,10 @@ function RootView:on_mouse_released(button, x, y, ...)
     end
     return
   end
-
+  
+  if self.context_menu:on_mouse_released(button, x, y, ...) then
+    return true
+  end
   if self.dragged_divider then
     self.dragged_divider = nil
   end
@@ -304,19 +364,23 @@ function RootView:on_mouse_moved(x, y, dx, dy)
     return
   end
 
-  if core.active_view == core.nag_view then
+  if self.context_menu:on_mouse_moved(x, y, dx, dy) then
+    return true
+  end
+
+  if self.active_view == self.nag_view then
     core.request_cursor("arrow")
-    core.active_view:on_mouse_moved(x, y, dx, dy)
+    self.nag_view:on_mouse_moved(x, y, dx, dy)
     return
   end
 
   if self.dragged_divider then
     local node = self.dragged_divider
     if node.type == "hsplit" then
-      x = common.clamp(x, 0, self.root_node.size.x * 0.95)
+      x = common.clamp(x - node.position.x, 0, self.root_node.size.x * 0.95)
       resize_child_node(node, "x", x, dx)
     elseif node.type == "vsplit" then
-      y = common.clamp(y, 0, self.root_node.size.y * 0.95)
+      y = common.clamp(y - node.position.y, 0, self.root_node.size.y * 0.95)
       resize_child_node(node, "y", y, dy)
     end
     node.divider = common.clamp(node.divider, 0.01, 0.99)
@@ -372,7 +436,67 @@ end
 ---@return boolean
 function RootView:on_file_dropped(filename, x, y)
   local node = self.root_node:get_child_overlapping_point(x, y)
-  return node and node.active_view:on_file_dropped(filename, x, y)
+  local result = node and node.active_view:on_file_dropped(filename, x, y)
+  if result then return result end
+  local info = system.get_file_info(filename)
+  if info and info.type == "dir" then
+    local abspath = system.absolute_path(filename) --[[@as string]]
+    if self.first_update_done then
+      -- ask the user if they want to open it here or somewhere else
+      core.nag_view:show(
+        "Open directory",
+        string.format('You are trying to open "%s"\n', common.home_encode(abspath))
+        .. "Do you want to open this directory here, or in a new window?",
+        {
+          { text = "Current window", default_yes = true },
+          { text = "New window", default_no = true },
+          { text = "Cancel" }
+        },
+        function(opt)
+          if opt.text == "Current window" then
+            core.add_project(abspath)
+          elseif opt.text == "New window" then
+            system.exec(string.format("%q %q", EXEFILE, filename))
+          end
+        end
+      )
+      return true
+    end
+    -- in macOS, when dropping folders into Lite XL in the dock,
+    -- the OS tries to start an instance of Lite XL with each folder as a DND request.
+    -- When this happens, the DND request always arrive before the first update() call.
+    -- We need to change the current project folder for the first request, and start
+    -- new instances for the rest to emulate existing behavior.
+    if self.first_dnd_processed then
+      -- FIXME: port to process API
+      system.exec(string.format("%q %q", EXEFILE, filename))
+    else
+      -- change project directory
+      core.confirm_close_docs(core.docs, function(dirpath)
+        core.open_folder_project(dirpath)
+      end, system.absolute_path(filename))
+      self.first_dnd_processed = true
+    end
+    return true
+  end
+  -- defer opening docs in case nagview is visible (which will cause a locked node error)
+  table.insert(self.defer_open_docs, { filename, x, y })
+  return true
+end
+
+function RootView:process_defer_open_docs()
+  if core.active_view == core.nag_view then return end
+  for _, drop in ipairs(self.defer_open_docs) do
+    -- file dragged into lite-xl, try to open it
+    local filename, x, y = table.unpack(drop)
+    local ok, doc = core.try(core.open_doc, filename)
+    if ok then
+      local node = self.root_node:get_child_overlapping_point(x, y)
+      node:set_active_view(node.active_view)
+      self:open_doc(doc)
+    end
+  end
+  self.defer_open_docs = {}
 end
 
 
@@ -384,7 +508,7 @@ end
 
 
 function RootView:on_text_input(...)
-  core.active_view:on_text_input(...)
+  self.active_view:on_text_input(...)
 end
 
 function RootView:on_touch_pressed(x, y, ...)
@@ -398,18 +522,18 @@ end
 
 function RootView:on_touch_moved(x, y, dx, dy, ...)
   if not self.touched_view then return end
-  if core.active_view == core.nag_view then
-    core.active_view:on_touch_moved(x, y, dx, dy, ...)
+  if self.active_view == self.window.nag_view then
+    self.active_view:on_touch_moved(x, y, dx, dy, ...)
     return
   end
 
   if self.dragged_divider then
     local node = self.dragged_divider
     if node.type == "hsplit" then
-      x = common.clamp(x, 0, self.root_node.size.x * 0.95)
+      x = common.clamp(x - node.position.x, 0, self.root_node.size.x * 0.95)
       resize_child_node(node, "x", x, dx)
     elseif node.type == "vsplit" then
-      y = common.clamp(y, 0, self.root_node.size.y * 0.95)
+      y = common.clamp(y - node.position.y, 0, self.root_node.size.y * 0.95)
       resize_child_node(node, "y", y, dy)
     end
     node.divider = common.clamp(node.divider, 0.01, 0.99)
@@ -432,7 +556,7 @@ function RootView:on_touch_moved(x, y, dx, dy, ...)
 end
 
 function RootView:on_ime_text_editing(...)
-  core.active_view:on_ime_text_editing(...)
+  self.active_view:on_ime_text_editing(...)
 end
 
 function RootView:on_focus_lost(...)
@@ -460,6 +584,12 @@ function RootView:update()
   self:update_drag_overlay()
   self:interpolate_drag_overlay(self.drag_overlay)
   self:interpolate_drag_overlay(self.drag_overlay_tab)
+  self:process_defer_open_docs()
+  self.first_update_done = true
+  self.context_menu:update()
+  -- set this to true because at this point there are no dnd requests
+  -- that are caused by the initial dnd into dock user action
+  self.first_dnd_processed = true
 end
 
 
@@ -559,11 +689,11 @@ function RootView:draw()
   if self.dragged_node and self.dragged_node.dragging then
     self:draw_grabbed_tab()
   end
+  self.context_menu:draw()
   if core.cursor_change_req then
     system.set_cursor(core.cursor_change_req)
     core.cursor_change_req = nil
   end
 end
-
 
 return RootView

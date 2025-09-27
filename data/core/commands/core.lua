@@ -3,6 +3,7 @@ local common = require "core.common"
 local command = require "core.command"
 local keymap = require "core.keymap"
 local LogView = require "core.logview"
+local Window = require "core.window"
 
 
 local fullscreen = false
@@ -10,9 +11,9 @@ local restore_title_view = false
 
 local function suggest_directory(text)
   text = common.home_expand(text)
-  local basedir = common.dirname(core.project_dir)
+  local basedir = common.dirname(core.root_project().path)
   return common.home_encode_list((basedir and text == basedir .. PATHSEP or text == "") and
-    core.recent_projects or common.dir_path_suggest(text))
+    core.recent_projects or common.dir_path_suggest(text, core.root_project().path))
 end
 
 local function check_directory_path(path)
@@ -37,20 +38,20 @@ command.add(nil, {
     core.quit(true)
   end,
 
-  ["core:toggle-fullscreen"] = function()
+  ["core:toggle-fullscreen"] = function(root_view)
     fullscreen = not fullscreen
     if fullscreen then
-      restore_title_view = core.title_view.visible
+      restore_title_view = root_view.title_view.visible
     end
-    system.set_window_mode(fullscreen and "fullscreen" or "normal")
+    root_view.window:set_mode(fullscreen and "fullscreen" or "normal")
     core.show_title_bar(not fullscreen and restore_title_view)
-    core.title_view:configure_hit_test(not fullscreen and restore_title_view)
+    root_view.title_view:configure_hit_test(not fullscreen and restore_title_view)
   end,
 
-  ["core:reload-module"] = function()
-    core.command_view:enter("Reload Module", {
+  ["core:reload-module"] = function(root_view)
+    root_view.command_view:enter("Reload Module", {
       submit = function(text, item)
-        local text = item and item.text or text
+        text = item and item.text or text
         core.reload_module(text)
         core.log("Reloaded module %q", text)
       end,
@@ -64,17 +65,18 @@ command.add(nil, {
     })
   end,
 
-  ["core:find-command"] = function()
-    local commands = command.get_all_valid()
-    core.command_view:enter("Do Command", {
+  ["core:find-command"] = function(root_view)
+    local commands = command.get_all_valid(root_view)
+    root_view.command_view:enter("Do Command", {
       submit = function(text, item)
         if item then
-          command.perform(item.command)
+          command.perform(item.command, root_view)
         end
       end,
       suggest = function(text)
-        local res = common.fuzzy_match(commands, text)
-        for i, name in ipairs(res) do
+        local res = {}
+        local matched = common.fuzzy_match(commands, text)
+        for i, name in ipairs(matched) do
           res[i] = {
             text = command.prettify_name(name),
             info = keymap.get_binding(name),
@@ -86,61 +88,39 @@ command.add(nil, {
     })
   end,
 
-  ["core:find-file"] = function()
-    if not core.project_files_number() then
-       return command.perform "core:open-file"
-    end
-    local files = {}
-    for dir, item in core.get_project_files() do
-      if item.type == "file" then
-        local path = (dir == core.project_dir and "" or dir .. PATHSEP)
-        table.insert(files, common.home_encode(path .. item.filename))
-      end
-    end
-    core.command_view:enter("Open File From Project", {
-      submit = function(text, item)
-        text = item and item.text or text
-        core.root_view:open_doc(core.open_doc(common.home_expand(text)))
-      end,
-      suggest = function(text)
-        return common.fuzzy_match_with_recents(files, core.visited_files, text)
-      end
-    })
+  ["core:new-doc"] = function(root_view)
+    root_view:open_doc(core.open_doc())
   end,
 
-  ["core:new-doc"] = function()
-    core.root_view:open_doc(core.open_doc())
-  end,
-
-  ["core:new-named-doc"] = function()
-    core.command_view:enter("File name", {
+  ["core:new-named-doc"] = function(root_view)
+    root_view.command_view:enter("File name", {
       submit = function(text)
-        core.root_view:open_doc(core.open_doc(text))
+        root_view:open_doc(core.open_doc(text))
       end
     })
   end,
 
-  ["core:open-file"] = function()
-    local view = core.active_view
+  ["core:open-file"] = function(root_view)
+    local view = root_view.active_view
     local text
     if view.doc and view.doc.abs_filename then
       local dirname, filename = view.doc.abs_filename:match("(.*)[/\\](.+)$")
       if dirname then
         dirname = core.normalize_to_project_dir(dirname)
-        text = dirname == core.project_dir and "" or common.home_encode(dirname) .. PATHSEP
+        text = dirname == core.root_project().path and "" or common.home_encode(dirname) .. PATHSEP
       end
     end
-    core.command_view:enter("Open File", {
+    root_view.command_view:enter("Open File", {
       text = text,
       submit = function(text)
-        local filename = system.absolute_path(common.home_expand(text))
-        core.root_view:open_doc(core.open_doc(filename))
+        local filename = core.project_absolute_path(common.home_expand(text))
+        root_view:open_doc(core.open_doc(filename))
       end,
       suggest = function (text)
-          return common.home_encode_list(common.path_suggest(common.home_expand(text)))
-        end,
+        return common.home_encode_list(common.path_suggest(common.home_expand(text), core.root_project() and core.root_project().path))
+      end,
       validate = function(text)
-          local filename = common.home_expand(text)
+          local filename = core.project_absolute_path(common.home_expand(text))
           local path_stat, err = system.get_file_info(filename)
           if err then
             if err:find("No such file", 1, true) then
@@ -152,7 +132,8 @@ command.add(nil, {
               end
             end
             core.error("Cannot open file %s: %s", text, err)
-          elseif path_stat.type == 'dir' then
+          elseif --[[@cast path_stat -nil]] path_stat.type == 'dir' then
+            -- TODO: remove the above cast once https://github.com/LuaLS/lua-language-server/discussions/3102 is implemented.
             core.error("Cannot open %s, is a folder", text)
           else
             return true
@@ -161,33 +142,39 @@ command.add(nil, {
     })
   end,
 
-  ["core:open-log"] = function()
-    local node = core.root_view:get_active_node_default()
-    node:add_view(LogView())
+  ["core:open-log"] = function(root_view)
+    root_view:get_active_node_default():add_view(LogView(root_view))
   end,
 
-  ["core:open-user-module"] = function()
+  ["core:open-user-module"] = function(root_view)
     local user_module_doc = core.open_doc(USERDIR .. "/init.lua")
     if not user_module_doc then return end
-    core.root_view:open_doc(user_module_doc)
+    root_view:open_doc(user_module_doc)
   end,
 
-  ["core:open-project-module"] = function()
+  ["core:open-project-module"] = function(root_view)
     if not system.get_file_info(".lite_project.lua") then
       core.try(core.write_init_project_module, ".lite_project.lua")
     end
     local doc = core.open_doc(".lite_project.lua")
-    core.root_view:open_doc(doc)
+    root_view:open_doc(doc)
     doc:save()
   end,
+  
+  ["core:new-window"] = function(root_view)
+    local window = Window(renwindow.create(""))
+    core.add_window(window)
+    window:configure_borderless_window(core.windows[1].borderless)
+    window.renwindow:set_size(window.renwindow:get_size())
+  end,
 
-  ["core:change-project-folder"] = function()
-    local dirname = common.dirname(core.project_dir)
+  ["core:change-project-folder"] = function(root_view)
+    local dirname = common.dirname(core.root_project().path)
     local text
     if dirname then
       text = common.home_encode(dirname) .. PATHSEP
     end
-    core.command_view:enter("Change Project Folder", {
+    root_view.command_view:enter("Change Project Folder", {
       text = text,
       submit = function(text)
         local path = common.home_expand(text)
@@ -196,22 +183,22 @@ command.add(nil, {
           core.error("Cannot open directory %q", path)
           return
         end
-        if abs_path == core.project_dir then return end
+        if abs_path == core.root_project().path then return end
         core.confirm_close_docs(core.docs, function(dirpath)
-          core.open_folder_project(dirpath)
+          core.open_project(dirpath)
         end, abs_path)
       end,
       suggest = suggest_directory
     })
   end,
 
-  ["core:open-project-folder"] = function()
-    local dirname = common.dirname(core.project_dir)
+  ["core:open-project-folder"] = function(root_view)
+    local dirname = common.dirname(core.root_project().path)
     local text
     if dirname then
       text = common.home_encode(dirname) .. PATHSEP
     end
-    core.command_view:enter("Open Project", {
+    root_view.command_view:enter("Open Project", {
       text = text,
       submit = function(text)
         local path = common.home_expand(text)
@@ -220,7 +207,7 @@ command.add(nil, {
           core.error("Cannot open directory %q", path)
           return
         end
-        if abs_path == core.project_dir then
+        if abs_path == core.root_project().path then
           core.error("Directory %q is currently opened", abs_path)
           return
         end
@@ -230,8 +217,8 @@ command.add(nil, {
     })
   end,
 
-  ["core:add-directory"] = function()
-    core.command_view:enter("Add Directory", {
+  ["core:add-directory"] = function(root_view)
+    root_view.command_view:enter("Add Directory", {
       submit = function(text)
         text = common.home_expand(text)
         local path_stat, err = system.get_file_info(text)
@@ -242,22 +229,22 @@ command.add(nil, {
           core.error("%q is not a directory", text)
           return
         end
-        core.add_project_directory(system.absolute_path(text))
+        core.add_project(system.absolute_path(text))
       end,
       suggest = suggest_directory
     })
   end,
 
-  ["core:remove-directory"] = function()
+  ["core:remove-directory"] = function(root_view)
     local dir_list = {}
-    local n = #core.project_directories
+    local n = #core.projects
     for i = n, 2, -1 do
-      dir_list[n - i + 1] = core.project_directories[i].name
+      dir_list[n - i + 1] = core.projects[i].name
     end
-    core.command_view:enter("Remove Directory", {
+    root_view.command_view:enter("Remove Directory", {
       submit = function(text, item)
         text = common.home_expand(item and item.text or text)
-        if not core.remove_project_directory(text) then
+        if not core.remove_project(text) then
           core.error("No directory %q to be removed", text)
         end
       end,

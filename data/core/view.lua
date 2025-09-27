@@ -48,6 +48,8 @@ local Scrollbar = require "core.scrollbar"
 ---@field current_scale number
 local View = Object:extend()
 
+function View:__tostring() return "View" end
+
 -- context can be "application" or "session". The instance of objects
 -- with context "session" will be closed when a project session is
 -- terminated. The context "application" is for functional UI elements.
@@ -332,5 +334,15 @@ end
 function View:draw()
 end
 
+
+-- To enable a context menu for this view, should return:
+-- { items = {
+--    { text = "Item 1",     command = "command:run1" },
+--    { text = "Item 2",     command = "command:run2" },
+-- } }
+-- Any command whose predicate fails will not be included
+-- in the context menu.
+function View:on_context_menu(x, y)
+end
 
 return View

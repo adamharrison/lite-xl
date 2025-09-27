@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <SDL.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 #include "api/api.h"
 #include "rencache.h"
 #include "renderer.h"
@@ -9,37 +10,34 @@
 
 #ifdef _WIN32
   #include <windows.h>
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__serenity__)
   #include <unistd.h>
-#elif defined(__APPLE__)
+#elif defined(SDL_PLATFORM_APPLE)
   #include <mach-o/dyld.h>
 #elif defined(__FreeBSD__)
   #include <sys/sysctl.h>
 #endif
 
-
-static SDL_Window *window;
-
 static void get_exe_filename(char *buf, int sz) {
 #if _WIN32
   int len;
-  wchar_t *buf_w = malloc(sizeof(wchar_t) * sz);
+  wchar_t *buf_w = SDL_malloc(sizeof(wchar_t) * sz);
   if (buf_w) {
     len = GetModuleFileNameW(NULL, buf_w, sz - 1);
     buf_w[len] = L'\0';
     // if the conversion failed we'll empty the string
     if (!WideCharToMultiByte(CP_UTF8, 0, buf_w, -1, buf, sz, NULL, NULL))
       buf[0] = '\0';
-    free(buf_w);
+    SDL_free(buf_w);
   } else {
     buf[0] = '\0';
   }
-#elif __linux__
+#elif __linux__ || __serenity__
   char path[] = "/proc/self/exe";
   ssize_t len = readlink(path, buf, sz - 1);
   if (len > 0)
     buf[len] = '\0';
-#elif __APPLE__
+#elif SDL_PLATFORM_APPLE
   /* use realpath to resolve a symlink if the process was launched from one.
   ** This happens when Homebrew installs a cack and creates a symlink in
   ** /usr/loca/bin for launching the executable from the command line. */
@@ -56,23 +54,6 @@ static void get_exe_filename(char *buf, int sz) {
 #endif
 }
 
-
-static void init_window_icon(void) {
-#if !defined(_WIN32) && !defined(__APPLE__)
-  #include "../resources/icons/icon.inl"
-  (void) icon_rgba_len; /* unused */
-  SDL_Surface *surf = SDL_CreateRGBSurfaceFrom(
-    icon_rgba, 64, 64,
-    32, 64 * 4,
-    0x000000ff,
-    0x0000ff00,
-    0x00ff0000,
-    0xff000000);
-  SDL_SetWindowIcon(window, surf);
-  SDL_FreeSurface(surf);
-#endif
-}
-
 #ifdef _WIN32
 #define LITE_OS_HOME "USERPROFILE"
 #define LITE_PATHSEP_PATTERN "\\\\"
@@ -83,7 +64,7 @@ static void init_window_icon(void) {
 #define LITE_NONPATHSEP_PATTERN "[^/]+"
 #endif
 
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
 void enable_momentum_scroll();
 #ifdef MACOS_USE_BUNDLE
 void set_macos_bundle_resources(lua_State *L);
@@ -108,8 +89,11 @@ void set_macos_bundle_resources(lua_State *L);
     #define ARCH_PLATFORM "linux"
   #elif __FreeBSD__
     #define ARCH_PLATFORM "freebsd"
-  #elif __APPLE__
+  #elif SDL_PLATFORM_APPLE
     #define ARCH_PLATFORM "darwin"
+  #elif __serenity__
+    #define ARCH_PLATFORM "serenity"
+  #else
   #endif
 
   #if !defined(ARCH_PROCESSOR) || !defined(ARCH_PLATFORM)
@@ -124,64 +108,26 @@ int main(int argc, char **argv) {
   signal(SIGPIPE, SIG_IGN);
 #endif
 
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
+  SDL_SetAppMetadata("Lite XL", LITE_PROJECT_VERSION_STR, "com.lite_xl.LiteXL");
+  if (!SDL_Init(SDL_INIT_EVENTS)) {
     fprintf(stderr, "Error initializing sdl: %s", SDL_GetError());
     exit(1);
   }
-  SDL_EnableScreenSaver();
-  SDL_EventState(SDL_DROPFILE, SDL_ENABLE);
+  SDL_SetEventEnabled(SDL_EVENT_DROP_FILE, true);
   atexit(SDL_Quit);
-
-#ifdef SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR /* Available since 2.0.8 */
-  SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
-#endif
-#if SDL_VERSION_ATLEAST(2, 0, 5)
-  SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
-#endif
-#if SDL_VERSION_ATLEAST(2, 0, 18)
-  SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
-#endif
-#if SDL_VERSION_ATLEAST(2, 0, 22)
-  SDL_SetHint(SDL_HINT_IME_SUPPORT_EXTENDED_TEXT, "1");
-#endif
-
-#if SDL_VERSION_ATLEAST(2, 0, 8)
-  /* This hint tells SDL to respect borderless window as a normal window.
-  ** For example, the window will sit right on top of the taskbar instead
-  ** of obscuring it. */
-  SDL_SetHint("SDL_BORDERLESS_WINDOWED_STYLE", "1");
-#endif
-#if SDL_VERSION_ATLEAST(2, 0, 12)
-  /* This hint tells SDL to allow the user to resize a borderless windoow.
-  ** It also enables aero-snap on Windows apparently. */
-  SDL_SetHint("SDL_BORDERLESS_RESIZABLE_STYLE", "1");
-#endif
-#if SDL_VERSION_ATLEAST(2, 0, 9)
-  SDL_SetHint("SDL_MOUSE_DOUBLE_CLICK_RADIUS", "4");
-#endif
-
-  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
-
-  SDL_DisplayMode dm;
-  SDL_GetCurrentDisplayMode(0, &dm);
-
-  window = SDL_CreateWindow(
-    "", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, dm.w * 0.8, dm.h * 0.8,
-    SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_HIDDEN);
-  init_window_icon();
-  if (!window) {
-    fprintf(stderr, "Error creating lite-xl window: %s", SDL_GetError());
-    exit(1);
+  
+  if (ren_init() != 0) {
+    fprintf(stderr, "Error initializing renderer: %s\n", SDL_GetError());
   }
-  ren_init(window);
 
+  int has_restarted = 0;
   lua_State *L;
+
 init_lua:
   L = luaL_newstate();
   luaL_openlibs(L);
   api_load_libs(L);
-
-
+  
   lua_newtable(L);
   for (int i = 0; i < argc; i++) {
     lua_pushstring(L, argv[i]);
@@ -194,6 +140,9 @@ init_lua:
 
   lua_pushstring(L, LITE_ARCH_TUPLE);
   lua_setglobal(L, "ARCH");
+  
+  lua_pushboolean(L, has_restarted);
+  lua_setglobal(L, "RESTARTED");
 
   char exename[2048];
   get_exe_filename(exename, sizeof(exename));
@@ -205,14 +154,14 @@ init_lua:
   }
   lua_setglobal(L, "EXEFILE");
 
-#ifdef __APPLE__
+#ifdef SDL_PLATFORM_APPLE
   enable_momentum_scroll();
   #ifdef MACOS_USE_BUNDLE
     set_macos_bundle_resources(L);
   #endif
 #endif
-  SDL_EventState(SDL_TEXTINPUT, SDL_ENABLE);
-  SDL_EventState(SDL_TEXTEDITING, SDL_ENABLE);
+  SDL_SetEventEnabled(SDL_EVENT_TEXT_INPUT, true);
+  SDL_SetEventEnabled(SDL_EVENT_TEXT_EDITING, true);
 
   const char *init_lite_code = \
     "local core\n"
@@ -259,13 +208,13 @@ init_lua:
   if (lua_toboolean(L, -1)) {
     lua_close(L);
     rencache_invalidate();
+    has_restarted = 1;
     goto init_lua;
   }
 
-  // This allows the window to be destroyed before lite-xl is done with
-  // reaping child processes
-  ren_free_window_resources(&window_renderer);
   lua_close(L);
+
+  ren_free();
 
   return EXIT_SUCCESS;
 }

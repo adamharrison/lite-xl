@@ -1,4 +1,4 @@
--- mod-version:3
+-- mod-version:4
 local core = require "core"
 local command = require "core.command"
 local translate = require "core.doc.translate"
@@ -42,7 +42,7 @@ end
 
 command.add("core.docview", {
   ["tabularize:tabularize"] = function(dv)
-    core.command_view:enter("Tabularize On Delimiter", {
+    dv.root_view.command_view:enter("Tabularize On Delimiter", {
       submit = function(delim)
         if delim == "" then delim = " " end
 

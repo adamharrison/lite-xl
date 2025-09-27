@@ -152,11 +152,15 @@ end
 
 
 local function compare_score(a, b)
+  if a.score == b.score then
+    return tostring(a.text) < tostring(b.text)
+  end
   return a.score > b.score
 end
 
 local function fuzzy_match_items(items, needle, files)
   local res = {}
+  needle = (PLATFORM == "Windows" and files) and needle:gsub('/', PATHSEP) or needle
   for _, item in ipairs(items) do
     local score = system.fuzzy_match(tostring(item), needle, files)
     if score then
@@ -178,9 +182,9 @@ end
 ---order of similarity is returned.
 ---@param haystack string
 ---@param needle string
----@param files boolean If true, the matching process will be performed in reverse to better match paths.
+---@param files? boolean If true, the matching process will be performed in reverse to better match paths.
 ---@return number
----@overload fun(haystack: string[], needle: string, files: boolean): string[]
+---@overload fun(haystack: string[], needle: string, files?: boolean): string[]
 function common.fuzzy_match(haystack, needle, files)
   if type(haystack) == "table" then
     return fuzzy_match_items(haystack, needle, files)
@@ -226,7 +230,12 @@ function common.path_suggest(text, root)
   if root and root:sub(-1) ~= PATHSEP then
     root = root .. PATHSEP
   end
-  local path, name = text:match("^(.-)([^/\\]*)$")
+
+  local pathsep = PATHSEP
+  if PLATFORM == "Windows" then
+    pathsep = "\\/"
+  end
+  local path = text:match("^(.-)[^"..pathsep.."]*$")
   local clean_dotslash = false
   -- ignore root if path is absolute
   local is_absolute = common.is_absolute_path(text)
@@ -277,10 +286,11 @@ end
 
 ---Returns a list of directories that are related to a path.
 ---@param text string The input path.
+---@param root string The root directory.
 ---@return string[]
-function common.dir_path_suggest(text)
-  local path, name = text:match("^(.-)([^/\\]*)$")
-  local files = system.list_dir(path == "" and "." or path) or {}
+function common.dir_path_suggest(text, root)
+  local path, name = text:match("^(.-)([^"..PATHSEP.."]*)$")
+  local files = system.list_dir(path == "" and root or path) or {}
   local res = {}
   for _, file in ipairs(files) do
     file = path .. file
@@ -298,7 +308,7 @@ end
 ---@param dir_list string[] A list of paths to filter.
 ---@return string[]
 function common.dir_list_suggest(text, dir_list)
-  local path, name = text:match("^(.-)([^/\\]*)$")
+  local path, name = text:match("^(.-)([^"..PATHSEP.."]*)$")
   local res = {}
   for _, dir_path in ipairs(dir_list) do
     if dir_path:lower():find(text:lower(), nil, true) == 1 then
@@ -461,7 +471,7 @@ end
 function common.basename(path)
   -- a path should never end by / or \ except if it is '/' (unix root) or
   -- 'X:\' (windows drive)
-  return path:match("[^\\/]+$") or path
+  return path:match("[^"..PATHSEP.."]+$") or path
 end
 
 
@@ -470,7 +480,7 @@ end
 ---@param path string
 ---@return string|nil
 function common.dirname(path)
-  return path:match("(.+)[\\/][^\\/]+$")
+  return path:match("(.+)["..PATHSEP.."][^"..PATHSEP.."]+$")
 end
 
 
@@ -479,12 +489,7 @@ end
 ---@return string
 function common.home_encode(text)
   if HOME and string.find(text, HOME, 1, true) == 1 then
-    local dir_pos = #HOME + 1
-    -- ensure we don't replace if the text is just "$HOME" or "$HOME/" so
-    -- it must have a "/" following the $HOME and some characters following.
-    if string.find(text, PATHSEP, dir_pos, true) == dir_pos and #text > dir_pos then
-      return "~" .. text:sub(dir_pos)
-    end
+    return "~" .. text:sub(#HOME + 1)
   end
   return text
 end
@@ -513,10 +518,10 @@ end
 
 local function split_on_slash(s, sep_pattern)
   local t = {}
-  if s:match("^[/\\]") then
+  if s:match("^["..PATHSEP.."]") then
     t[#t + 1] = ""
   end
-  for fragment in string.gmatch(s, "([^/\\]+)") do
+  for fragment in string.gmatch(s, "([^"..PATHSEP.."]+)") do
     t[#t + 1] = fragment
   end
   return t
@@ -649,7 +654,7 @@ function common.mkdirp(path)
   while path and path ~= "" do
     local success_mkdir = system.mkdir(path)
     if success_mkdir then break end
-    local updir, basedir = path:match("(.*)[/\\](.+)$")
+    local updir, basedir = path:match("(.*)["..PATHSEP.."](.+)$")
     table.insert(subdirs, 1, basedir or path)
     path = updir
   end
@@ -714,6 +719,13 @@ function common.rm(path, recursively)
   end
 
   return true
+end
+
+function common.sort_positions(line1, col1, line2, col2)
+  if line1 > line2 or line1 == line2 and col1 > col2 then
+    return line2, col2, line1, col1, true
+  end
+  return line1, col1, line2, col2, false
 end
 
 

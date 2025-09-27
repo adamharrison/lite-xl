@@ -1,5 +1,6 @@
 local core = require "core"
 local common = require "core.common"
+local config = require "core.config"
 local style = require "core.style"
 local Doc = require "core.doc"
 local DocView = require "core.docview"
@@ -10,17 +11,20 @@ local View = require "core.view"
 ---@field super core.doc
 local SingleLineDoc = Doc:extend()
 
-function SingleLineDoc:insert(line, col, text)
-  SingleLineDoc.super.insert(self, line, col, text:gsub("\n", ""))
+function SingleLineDoc:__tostring() return "SingleLineDoc" end
+
+function SingleLineDoc:insert(line, col, text, selections)
+  local stripped = text:gsub("\n", "")
+  SingleLineDoc.super.insert(self, line, col, stripped, selections)
 end
 
 ---@class core.commandview : core.docview
 ---@field super core.docview
 local CommandView = DocView:extend()
 
-CommandView.context = "application"
+function CommandView:__tostring() return "CommandView" end
 
-local max_suggestions = 10
+CommandView.context = "application"
 
 local noop = function() end
 
@@ -47,13 +51,17 @@ local default_state = {
 }
 
 
-function CommandView:new()
+function CommandView:new(root_view)
   CommandView.super.new(self, SingleLineDoc())
+  self.root_view = root_view
   self.suggestion_idx = 1
+  self.suggestions_offset = 1
   self.suggestions = {}
   self.suggestions_height = 0
   self.last_change_id = 0
   self.last_text = ""
+  self.user_supplied_text = ""
+  self.last_change = "text"
   self.gutter_width = 0
   self.gutter_text_brightness = 0
   self.selection_offset = 0
@@ -76,11 +84,9 @@ function CommandView:get_name()
 end
 
 
-function CommandView:get_line_screen_position(line, col)
-  local x = CommandView.super.get_line_screen_position(self, 1, col)
-  local _, y = self:get_content_offset()
-  local lh = self:get_line_height()
-  return x, y + (self.size.y - lh) / 2
+function CommandView:get_vline_position(vline, vcol)
+  local x, y = CommandView.super.get_vline_position(self, vline, vcol)
+  return x, y + (self.size.y - self:get_line_height()) / 2
 end
 
 
@@ -94,7 +100,7 @@ function CommandView:get_scrollable_size()
 end
 
 function CommandView:get_h_scrollable_size()
-  return 0
+  return math.huge
 end
 
 
@@ -111,9 +117,9 @@ end
 function CommandView:set_text(text, select)
   self.last_text = text
   self.doc:remove(1, 1, math.huge, math.huge)
-  self.doc:text_input(text)
+  self:text_input(text)
   if select then
-    self.doc:set_selection(math.huge, math.huge, 1, 1)
+    self:set_selection(math.huge, math.huge, 1, 1)
   end
 end
 
@@ -128,6 +134,25 @@ function CommandView:move_suggestion_idx(dir)
     end
   end
 
+  local function get_suggestions_offset()
+    local max_visible = math.min(config.max_visible_commands, #self.suggestions)
+    if dir > 0 then
+      if self.suggestions_offset + max_visible < self.suggestion_idx + 1 then
+        return self.suggestion_idx - max_visible + 1
+      elseif self.suggestions_offset > self.suggestion_idx then
+        return self.suggestion_idx
+      end
+    else
+      if self.suggestions_offset > self.suggestion_idx then
+        return self.suggestion_idx
+      elseif self.suggestions_offset + max_visible < self.suggestion_idx + 1 then
+        return self.suggestion_idx - max_visible + 1
+      end
+    end
+    return self.suggestions_offset
+  end
+
+  self.last_change = "suggestion"
   if self.state.show_suggestions then
     local n = self.suggestion_idx + dir
     self.suggestion_idx = overflow_suggestion_idx(n, #self.suggestions)
@@ -151,6 +176,8 @@ function CommandView:move_suggestion_idx(dir)
     self.last_change_id = self.doc:get_change_id()
     self.state.suggest(self:get_text())
   end
+
+  self.suggestions_offset = get_suggestions_offset()
 end
 
 
@@ -209,12 +236,14 @@ function CommandView:enter(label, ...)
   if options.text or options.select_text then
     local text = options.text or old_text
     self:set_text(text, self.state.select_text)
+  else
+    self:sanitize_selection()
   end
   -- Replace with a simple
   -- self:set_text(self.state.text, self.state.select_text)
   -- once old usage is removed
 
-  core.set_active_view(self)
+  self.root_view:set_active_view(self)
   self:update_suggestions()
   self.gutter_text_brightness = 100
   self.label = label .. ": "
@@ -222,12 +251,13 @@ end
 
 
 function CommandView:exit(submitted, inexplicit)
-  if core.active_view == self then
-    core.set_active_view(core.last_active_view)
+  if self.root_view.active_view == self then
+    self.root_view:set_active_view(self.root_view.last_active_view)
   end
   local cancel = self.state.cancel
   self.state = default_state
   self.doc:reset()
+  self:invalidate_cache()
   self.suggestions = {}
   if not submitted then cancel(not inexplicit) end
   self.save_suggestion = nil
@@ -251,7 +281,8 @@ end
 
 
 function CommandView:update_suggestions()
-  local t = self.state.suggest(self:get_text()) or {}
+  local text = self:get_text()
+  local t = self.state.suggest(self.last_change == "suggestion" and self.user_supplied_text or text) or {}
   local res = {}
   for i, item in ipairs(t) do
     if type(item) == "string" then
@@ -259,20 +290,36 @@ function CommandView:update_suggestions()
     end
     res[i] = item
   end
+  if self.suggestions and self.last_change == "suggestion" then
+    local new_suggestion_idx
+    for i, v in ipairs(res) do
+      if v.text == self.suggestions[self.suggestion_idx].text then
+        new_suggestion_idx = i
+        break
+      end
+    end
+    self.suggestion_idx = new_suggestion_idx
+    -- This preserves the suggestion_offset and realigns it with the new table.
+    self:move_suggestion_idx(0)
+  else
+    self.suggestion_idx = 1
+    self.suggestions_offset = 1
+  end
   self.suggestions = res
-  self.suggestion_idx = 1
 end
 
 
 function CommandView:update()
   CommandView.super.update(self)
 
-  if core.active_view ~= self and self.state ~= default_state then
+  if self.root_view.active_view ~= self and self.state ~= default_state then
     self:exit(false, true)
   end
 
   -- update suggestions if text has changed
   if self.last_change_id ~= self.doc:get_change_id() then
+    self.last_change = "text"
+    self.user_supplied_text = self:get_text()
     self:update_suggestions()
     if self.state.typeahead and self.suggestions[self.suggestion_idx] then
       local current_text = self:get_text()
@@ -280,7 +327,7 @@ function CommandView:update()
       if #self.last_text < #current_text and
          string.find(suggested_text, current_text, 1, true) == 1 then
         self:set_text(suggested_text)
-        self.doc:set_selection(1, #current_text + 1, 1, math.huge)
+        self:set_selection(1, #current_text + 1, 1, math.huge)
       end
       self.last_text = current_text
     end
@@ -300,16 +347,16 @@ function CommandView:update()
 
   -- update suggestions box height
   local lh = self:get_suggestion_line_height()
-  local dest = self.state.show_suggestions and math.min(#self.suggestions, max_suggestions) * lh or 0
+  local dest = self.state.show_suggestions and math.min(#self.suggestions, config.max_visible_commands) * lh or 0
   self:move_towards("suggestions_height", dest, nil, "commandview")
 
   -- update suggestion cursor offset
-  local dest = math.min(self.suggestion_idx, max_suggestions) * self:get_suggestion_line_height()
+  local dest = (self.suggestion_idx - self.suggestions_offset + 1) * self:get_suggestion_line_height()
   self:move_towards("selection_offset", dest, nil, "commandview")
 
   -- update size based on whether this is the active_view
   local dest = 0
-  if self == core.active_view then
+  if self == self.root_view.active_view then
     dest = style.font:get_height() + style.padding.y * 2
   end
   self:move_towards(self.size, "y", dest, nil, "commandview")
@@ -325,10 +372,10 @@ function CommandView:draw_line_gutter(idx, x, y)
   local yoffset = self:get_line_text_y_offset()
   local pos = self.position
   local color = common.lerp(style.text, style.accent, self.gutter_text_brightness / 100)
-  core.push_clip_rect(pos.x, pos.y, self:get_gutter_width(), self.size.y)
+  self.root_view.window:push_clip_rect(pos.x, pos.y, self:get_gutter_width(), self.size.y)
   x = x + style.padding.x
   renderer.draw_text(self:get_font(), self.label, x, y + yoffset, color)
-  core.pop_clip_rect()
+  self.root_view.window:pop_clip_rect()
   return self:get_line_height()
 end
 
@@ -340,6 +387,7 @@ local function draw_suggestions_box(self)
   local h = math.ceil(self.suggestions_height)
   local rx, ry, rw, rh = self.position.x, self.position.y - h - dh, self.size.x, h
 
+  self.root_view.window:push_clip_rect(rx, ry, rw, rh)
   -- draw suggestions background
   if #self.suggestions > 0 then
     renderer.draw_rect(rx, ry, rw, rh, style.background3)
@@ -349,14 +397,12 @@ local function draw_suggestions_box(self)
   end
 
   -- draw suggestion text
-  local offset = math.max(self.suggestion_idx - max_suggestions, 0)
-  local last = math.min(offset + max_suggestions, #self.suggestions)
-  core.push_clip_rect(rx, ry, rw, rh)
-  local first = 1 + offset
+  local first = math.max(self.suggestions_offset, 1)
+  local last = math.min(self.suggestions_offset + config.max_visible_commands, #self.suggestions)
   for i=first, last do
     local item = self.suggestions[i]
     local color = (i == self.suggestion_idx) and style.accent or style.text
-    local y = self.position.y - (i - offset) * lh - dh
+    local y = self.position.y - (i - first + 1) * lh - dh
     common.draw_text(self:get_font(), color, item.text, nil, x, y, 0, lh)
 
     if item.info then
@@ -364,16 +410,15 @@ local function draw_suggestions_box(self)
       common.draw_text(self:get_font(), style.dim, item.info, "right", x, y, w, lh)
     end
   end
-  core.pop_clip_rect()
+  self.root_view.window:pop_clip_rect()
 end
 
 
 function CommandView:draw()
   CommandView.super.draw(self)
   if self.state.show_suggestions then
-    core.root_view:defer_draw(draw_suggestions_box, self)
+    self.root_view:defer_draw(draw_suggestions_box, self)
   end
 end
-
 
 return CommandView

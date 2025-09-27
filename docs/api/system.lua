@@ -8,13 +8,14 @@ system = {}
 ---@alias system.fileinfotype
 ---| "file"  # It is a file.
 ---| "dir"   # It is a directory.
+---| nil     # The file type is unspecified.
 
 ---
 ---@class system.fileinfo
 ---@field public modified number A timestamp in seconds.
 ---@field public size number Size in bytes.
 ---@field public type system.fileinfotype Type of file
----@field public symlink boolean The directory is a symlink. This field is only set on Linux and on directories.
+---@field public symlink boolean The directory is a symlink. This field is only set on directories.
 
 ---
 ---Core function used to retrieve the current event been triggered by SDL.
@@ -61,10 +62,10 @@ function system.poll_event() end
 ---
 ---Wait until an event is triggered.
 ---
----@param timeout number Amount of seconds, also supports fractions
----of a second, eg: 0.01
+---@param timeout? number Amount of seconds, also supports fractions
+---of a second, eg: 0.01. If not provided, waits forever.
 ---
----@return boolean status True on success or false if there was an error.
+---@return boolean status True on success or false if there was an error or if no event was received.
 function system.wait_event(timeout) end
 
 ---
@@ -74,94 +75,40 @@ function system.wait_event(timeout) end
 function system.set_cursor(type) end
 
 ---
----Change the window title.
----
----@param title string
-function system.set_window_title(title) end
-
----@alias system.windowmode
----| "normal"
----| "minimized"
----| "maximized"
----| "fullscreen"
-
----
----Change the window mode.
----
----@param mode system.windowmode
-function system.set_window_mode(mode) end
-
----
----Retrieve the current window mode.
----
----@return system.windowmode mode
-function system.get_window_mode() end
-
----
----Toggle between bordered and borderless.
----
----@param bordered boolean
-function system.set_window_bordered(bordered) end
-
----
 ---When then window is run borderless (without system decorations), this
 ---function allows to set the size of the different regions that allow
 ---for custom window management.
 ---To disable custom window management, call this function without any
 ---arguments
 ---
+---@param window renwindow Target window
 ---@param title_height? number Height of the window decoration
 ---@param controls_width? number Width of window controls (maximize,minimize and close buttons, etc).
 ---@param resize_border? number The amount of pixels reserved for resizing
-function system.set_window_hit_test(title_height, controls_width, resize_border) end
+function system.set_window_hit_test(window, title_height, controls_width, resize_border) end
 
 ---
----Get the size and coordinates of the window.
+---Enables or disables text input.
 ---
----@return number width
----@return number height
----@return number x
----@return number y
-function system.get_window_size() end
-
----
----Sets the size and coordinates of the window.
----
----@param width number
----@param height number
----@param x number
----@param y number
-function system.set_window_size(width, height, x, y) end
-
----
----Check if the window currently has focus.
----
----@return boolean
-function system.window_has_focus() end
-
----
----Gets the mode of the window.
----
----@return system.windowmode
-function system.get_window_mode() end
+---@param window renwindow
+---@param enabled boolean
+function system.text_input(window, enabled) end
 
 ---
 ---Sets the position of the IME composition window.
 ---
+---@param window renwindow
 ---@param x number
 ---@param y number
 ---@param width number
 ---@param height number
-function system.set_text_input_rect(x, y, width, height) end
+function system.set_text_input_rect(window, x, y, width, height) end
 
 ---
 ---Clears any ongoing composition on the IME
-function system.clear_ime() end
-
 ---
----Raise the main window and give it input focus.
----Note: may not always be obeyed by the users window manager.
-function system.raise_window() end
+---@param window renwindow
+function system.clear_ime(window) end
 
 ---
 ---Opens a message box to display an error message.
@@ -184,6 +131,15 @@ function system.rmdir(path) end
 ---
 ---@param path string
 function system.chdir(path) end
+
+---
+---Truncates a file to a set length.
+---
+---@param file file* A file handle returned by io.open().
+---@param length integer? Number of bytes to truncate to. Defaults to 0.
+---@return boolean success True if the operation suceeded, false otherwise
+---@return string? message An error message if the operation failed.
+function system.ftruncate(file, length) end
 
 ---
 ---Create a new directory, note that this function doesn't recursively
@@ -256,6 +212,18 @@ function system.get_clipboard() end
 function system.set_clipboard(text) end
 
 ---
+---Retrieve the text currently stored in the primary selection.
+---
+---@return string
+function system.get_primary_selection() end
+
+---
+---Set the content of the primary selection.
+---
+---@param text string
+function system.set_primary_selection(text) end
+
+---
 ---Get the process id of lite-xl itself.
 ---
 ---@return integer
@@ -290,7 +258,7 @@ function system.exec(command) end
 ---
 ---@param haystack string
 ---@param needle string
----@param file boolean Reverse the algorithm to prioritize the end
+---@param file? boolean Reverse the algorithm to prioritize the end
 ---of the haystack, eg: with a haystack "/my/path/to/file" and a needle
 ---"file", will get better score than with this option not set to true.
 ---
@@ -300,10 +268,12 @@ function system.fuzzy_match(haystack, needle, file) end
 ---
 ---Change the opacity (also known as transparency) of the window.
 ---
+---@param window renwindow
 ---@param opacity number A value from 0.0 to 1.0, the lower the value
 ---the less visible the window will be.
+---
 ---@return boolean success True if the operation suceeded.
-function system.set_window_opacity(opacity) end
+function system.set_window_opacity(window, opacity) end
 
 ---
 ---Loads a lua native module using the default Lua API or lite-xl native plugin API.
@@ -324,5 +294,13 @@ function system.load_native_plugin(name, path) end
 ---@return boolean compare_result True if path1 < path2
 function system.path_compare(path1, type1, path2, type2) end
 
+---
+---Sets an environment variable.
+---The converse of os.getenv.
+---
+---@param key string
+---@param val string
+---@return boolean ok True if call succeeded
+function system.setenv(key, val) end
 
 return system

@@ -1,7 +1,9 @@
+#include <stdlib.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifdef _MSC_VER
@@ -52,6 +54,7 @@ typedef struct {
   float text_x;
   size_t len;
   int8_t tab_size;
+  RenTab tab;
   char text[];
 } DrawTextCommand;
 
@@ -118,7 +121,7 @@ static bool expand_command_buffer(RenWindow *window_renderer) {
   if (new_size == 0) {
     new_size = CMD_BUF_INIT_SIZE;
   }
-  uint8_t *new_command_buf = realloc(window_renderer->command_buf, new_size);
+  uint8_t *new_command_buf = SDL_realloc(window_renderer->command_buf, new_size);
   if (!new_command_buf) {
     return false;
   }
@@ -128,8 +131,9 @@ static bool expand_command_buffer(RenWindow *window_renderer) {
 }
 
 static void* push_command(RenWindow *window_renderer, enum CommandType type, int size) {
-  if (resize_issue) {
+  if (!window_renderer || resize_issue) {
     // Don't push new commands as we had problems resizing the command buffer.
+    // Or, we don't have an active buffer.
     // Let's wait for the next frame.
     return NULL;
   }
@@ -189,10 +193,11 @@ void rencache_draw_rect(RenWindow *window_renderer, RenRect rect, RenColor color
   }
 }
 
-double rencache_draw_text(RenWindow *window_renderer, RenFont **fonts, const char *text, size_t len, double x, int y, RenColor color)
+double rencache_draw_text(RenWindow *window_renderer, RenFont **fonts, const char *text, size_t len, double x, int y, RenColor color, RenTab tab)
 {
-  double width = ren_font_group_get_width(window_renderer, fonts, text, len);
-  RenRect rect = { x, y, (int)width, ren_font_group_get_height(fonts) };
+  int x_offset;
+  double width = ren_font_group_get_width(fonts, text, len, tab, &x_offset);
+  RenRect rect = { x + x_offset, y, (int)(width - x_offset), ren_font_group_get_height(fonts) };
   if (rects_overlap(last_clip_rect, rect)) {
     int sz = len + 1;
     DrawTextCommand *cmd = push_command(window_renderer, DRAW_TEXT, sizeof(DrawTextCommand) + sz);
@@ -204,6 +209,7 @@ double rencache_draw_text(RenWindow *window_renderer, RenFont **fonts, const cha
       cmd->text_x = x;
       cmd->len = len;
       cmd->tab_size = ren_font_group_get_tab_size(fonts);
+      cmd->tab = tab;
     }
   }
   return x + width;
@@ -318,7 +324,7 @@ void rencache_end_frame(RenWindow *window_renderer) {
           break;
         case DRAW_TEXT:
           ren_font_group_set_tab_size(tcmd->fonts, tcmd->tab_size);
-          ren_draw_text(&rs, tcmd->fonts, tcmd->text, tcmd->len, tcmd->text_x, tcmd->rect.y, tcmd->color);
+          ren_draw_text(&rs, tcmd->fonts, tcmd->text, tcmd->len, tcmd->text_x, tcmd->rect.y, tcmd->color, tcmd->tab);
           break;
       }
     }

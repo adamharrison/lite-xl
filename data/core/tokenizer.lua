@@ -1,6 +1,7 @@
 local core = require "core"
 local syntax = require "core.syntax"
 local config = require "core.config"
+local common = require "core.common"
 
 local tokenizer = {}
 local bad_patterns = {}
@@ -122,8 +123,10 @@ local function report_bad_pattern(log_fn, syntax, pattern_idx, msg, ...)
   end
   if bad_patterns[syntax][pattern_idx] then return end
   bad_patterns[syntax][pattern_idx] = true
-  log_fn("Malformed pattern #%d in %s language plugin. " .. msg,
-            pattern_idx, syntax.name or "unnamed", ...)
+  log_fn("Malformed pattern #%d <%s> in %s language plugin.\n" .. msg,
+            pattern_idx,
+            syntax.patterns[pattern_idx].pattern or syntax.patterns[pattern_idx].regex,
+            syntax.name or "unnamed", ...)
 end
 
 ---@param incoming_syntax table
@@ -197,10 +200,15 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
       retrieve_syntax_state(incoming_syntax, state)
   end
 
+  local function requires_utf8(pattern)
+    return pattern and (pattern:ulen() ~= #pattern or pattern:find("%%[wWaA]"))
+  end
+
   local function find_text(text, p, offset, at_start, close)
-    local target, res = p.pattern or p.regex, { 1, offset - 1 }
+    local target = p.pattern or p.regex
     local p_idx = close and 2 or 1
     local code = type(target) == "table" and target[p_idx] or target
+    if p.disabled then return end
 
     if p.whole_line == nil then p.whole_line = { } end
     if p.whole_line[p_idx] == nil then
@@ -210,9 +218,11 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
         -- Remove '^' from the beginning of the pattern
         if type(target) == "table" then
           target[p_idx] = code:usub(2)
+          code = target[p_idx]
         else
           p.pattern = p.pattern and code:usub(2)
           p.regex = p.regex and code:usub(2)
+          code = p.pattern or p.regex
         end
       end
     end
@@ -220,16 +230,31 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
     if p.regex and type(p.regex) ~= "table" then
       p._regex = p._regex or regex.compile(p.regex)
       code = p._regex
+    elseif p.pattern and type(p.pattern) == 'table' and p.pattern.is_utf8 == nil then
+      p.pattern.is_ascii = not requires_utf8(p.pattern[1]) and not requires_utf8(p.pattern[2]) and not requires_utf8(p.pattern[3])
     end
+    -- specifically if we're not utf8; we have special corner case code which doesn't use `ufind` or `usub` or the like
+    -- this helps with cases where a single token is quite long with a lot of escaped delimiters (i.e. a json string in a C file where quotes are escaped with backslahes)
+    -- it causes the tokenizer to choke on long lines that have lots of these escapes
+    local is_utf8 = not p.pattern or p.pattern.is_ascii ~= true
+    
+    local res = is_utf8 and { 1, offset - 1 } or { text:ucharpos(1) or 1, offset > 1 and text:ucharpos(offset - 1) or (offset - 1) }
 
     repeat
       local next = res[2] + 1
+      while is_utf8 == false and next < #text and (next > 1 and common.is_utf8_cont(text, next - 1)) do
+        next = next + 1
+      end
       -- If the pattern contained '^', allow matching only the whole line
       if p.whole_line[p_idx] and next > 1 then
         return
       end
-      res = p.pattern and { text:ufind((at_start or p.whole_line[p_idx]) and "^" .. code or code, next) }
-        or { regex.find(code, text, text:ucharpos(next), (at_start or p.whole_line[p_idx]) and regex.ANCHORED or 0) }
+      if is_utf8 then
+        res = p.pattern and { text:ufind((at_start or p.whole_line[p_idx]) and "^" .. code or code, next) }
+          or { regex.find(code, text, text:ucharpos(next), (at_start or p.whole_line[p_idx]) and regex.ANCHORED or 0) }
+      else
+        res = { text:find((at_start or p.whole_line[p_idx]) and "^" .. code or code, next) }
+      end
       if p.regex and #res > 0 then -- set correct utf8 len for regex result
         local char_pos_1 = res[1] > next and string.ulen(text:sub(1, res[1])) or next
         local char_pos_2 = string.ulen(text:sub(1, res[2]))
@@ -239,24 +264,47 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
         res[1] = char_pos_1
         res[2] = char_pos_2
       end
-      if not res[1] then return end
+      if not res[1] then 
+        return 
+      end
       if res[1] and target[3] then
         -- Check to see if the escaped character is there,
         -- and if it is not itself escaped.
         local count = 0
-        for i = res[1] - 1, 1, -1 do
-          if text:ubyte(i) ~= target[3]:ubyte() then break end
-          count = count + 1
-        end
-        if count % 2 == 0 then
-          -- The match is not escaped, so confirm it
-          break
+        if is_utf8 then
+          for i = res[1] - 1, 1, -1 do
+            if text:ubyte(i) ~= target[3]:ubyte() then break end
+            count = count + 1
+          end
+          if count % 2 == 0 then
+            -- The match is not escaped, so confirm it
+            break
+          else
+            -- The match is escaped, so avoid it
+            res[1] = false
+          end
         else
-          -- The match is escaped, so avoid it
-          res[1] = false
+          for i = res[1] - 1, 1, -1 do
+            if text:byte(i) ~= target[3]:byte() and (i == 1 or not common.is_utf8_cont(text, i - 1)) then break end
+            count = count + 1
+          end
+          if count % 2 == 0 then
+            -- The match is not escaped, so confirm it
+            break
+          else
+            -- The match is escaped, so avoid it
+            res[1] = false
+          end
         end
       end
     until at_start or not close or not target[3]
+    if not is_utf8 then
+      for i = 1, 2 do 
+        if type(res[i]) == 'number' then
+          res[i] = text:ulen(1, res[i]) 
+        end
+      end
+    end
     return table.unpack(res)
   end
 
@@ -280,7 +328,8 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
     -- continue trying to match the end pattern of a pair if we have a state set
     if current_pattern_idx > 0 then
       local p = current_syntax.patterns[current_pattern_idx]
-      local s, e = find_text(text, p, i, false, true)
+      local find_results = { find_text(text, p, i, false, true) }
+      local s, e = find_results[1], find_results[2]
       -- Use the first token type specified in the type table for the "middle"
       -- part of the subsyntax.
       local token_type = type(p.type) == "table" and p.type[1] or p.type
@@ -305,7 +354,12 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
       -- continue on as normal.
       if cont then
         if s then
-          push_token(res, token_type, text:usub(i, e))
+          -- Push remaining token before the end delimiter
+          if s > i then
+            push_token(res, token_type, text:usub(i, s - 1))
+          end
+          -- Push the end delimiter
+          push_tokens(res, current_syntax, p, text, find_results)
           set_subsyntax_pattern_idx(0)
           i = e + 1
         else
@@ -335,6 +389,14 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
     for n, p in ipairs(current_syntax.patterns) do
       local find_results = { find_text(text, p, i, true, false) }
       if find_results[1] then
+        -- Check for patterns successfully matching nothing
+        if find_results[1] > find_results[2] then
+          report_bad_pattern(core.warn, current_syntax, n,
+              "Pattern successfully matched, but nothing was captured.")
+          goto continue
+        end
+
+        -- Check for patterns with mismatching number of `types`
         local type_is_table = type(p.type) == "table"
         local n_types = type_is_table and #p.type or 1
         if #find_results == 2 and type_is_table then
@@ -363,6 +425,7 @@ function tokenizer.tokenize(incoming_syntax, text, state, resume)
         i = find_results[2] + 1
         matched = true
         break
+        ::continue::
       end
     end
 

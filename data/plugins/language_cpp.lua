@@ -1,30 +1,49 @@
--- mod-version:3
+-- mod-version:4
 local syntax = require "core.syntax"
+
+-- integer suffix combinations as a regex
+local isuf = [[(?:[lL][uU]|ll[uU]|LL[uU]|[uU][lL]\b|[uU]ll|[uU]LL|[uU]|[lL]\b|ll|LL)?]]
+-- float suffix combinations as a Lua pattern / regex
+local fsuf = "[fFlL]?"
+-- number with digit separator as a regex non-capturing group
+local digitsep = [[(?:\d[\d']*)]]
 
 syntax.add {
   name = "C++",
   files = {
     "%.h$", "%.inl$", "%.cpp$", "%.cc$", "%.C$", "%.cxx$",
-    "%.c++$", "%.hh$", "%.H$", "%.hxx$", "%.hpp$", "%.h++$"
+    "%.c++$", "%.hh$", "%.H$", "%.hxx$", "%.hpp$", "%.h++$",
+    "%.ino$", "%.cu$", "%.cuh$"
   },
   comment = "//",
   block_comment = { "/*", "*/" },
   patterns = {
-    { pattern = "//.*",                     type = "comment"  },
-    { pattern = { "/%*", "%*/" },           type = "comment"  },
-    { pattern = { '"', '"', '\\' },         type = "string"   },
-    { pattern = { "'", "'", '\\' },         type = "string"   },
-    { pattern = "0x%x+[%x']*",              type = "number"   },
-    { pattern = "%d+[%d%.'eE]*f?",          type = "number"   },
-    { pattern = "%.?%d+[%d']*f?",           type = "number"   },
-    { pattern = "[%+%-=/%*%^%%<>!~|:&]",    type = "operator" },
-    { pattern = "##",                       type = "operator" },
-    { pattern = "struct%s()[%a_][%w_]*",    type = {"keyword", "keyword2"} },
-    { pattern = "class%s()[%a_][%w_]*",     type = {"keyword", "keyword2"} },
-    { pattern = "union%s()[%a_][%w_]*",     type = {"keyword", "keyword2"} },
-    { pattern = "namespace%s()[%a_][%w_]*", type = {"keyword", "keyword2"} },
+    { pattern = "//.*",                                                            type = "comment"  },
+    { pattern = { "/%*", "%*/" },                                                  type = "comment"  },
+    { pattern = { '"', '"', '\\' },                                                type = "string"   },
+    { pattern = { "'", "'", '\\' },                                                type = "string"   },
+    { regex   = "0x[0-9a-fA-F][0-9a-fA-F']*"..isuf,                                type = "number"   },
+    { regex   = "0b[01][01']*"..isuf,                                              type = "number"   },
+    { regex   = "0()[0-7][0-7']*"..isuf,                                           type = { "keyword", "number" } },
+    { regex   = digitsep.."\\.?"..digitsep.."?(?:[Ee][-+]?"..digitsep..")?"..fsuf, type = "number" },
+    { regex   = "\\."..digitsep.."(?:[Ee][-+]?"..digitsep..")?"..fsuf,             type = "number" },
+    { pattern = "[%+%-=/%*%^%%<>!~|:&]",                                           type = "operator" },
+    { pattern = "##",                                                              type = "operator" },
+    { pattern = "struct%s()[%a_][%w_]*",                                           type = {"keyword", "keyword2"} },
+    { pattern = "class%s()[%a_][%w_]*",                                            type = {"keyword", "keyword2"} },
+    { pattern = "union%s()[%a_][%w_]*",                                            type = {"keyword", "keyword2"} },
+    { pattern = "namespace%s()[%a_][%w_]*",                                        type = {"keyword", "keyword2"} },
     -- static declarations
     { pattern = "static()%s+()inline",
+      type = { "keyword", "normal", "keyword" }
+    },
+    { pattern = "static()%s+()constexpr",
+      type = { "keyword", "normal", "keyword" }
+    },
+    { pattern = "static()%s+()constinit",
+      type = { "keyword", "normal", "keyword" }
+    },
+    { pattern = "static()%s+()consteval",
       type = { "keyword", "normal", "keyword" }
     },
     { pattern = "static()%s+()const",
@@ -132,7 +151,7 @@ syntax.add {
     ["this"]      = "keyword",
     ["thread_local"] = "keyword",
     ["requires"]  = "keyword",
-    ["co_wait"]   = "keyword",
+    ["co_await"]   = "keyword",
     ["co_return"] = "keyword",
     ["co_yield"]  = "keyword",
     ["decltype"] = "keyword",
