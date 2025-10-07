@@ -426,8 +426,9 @@ static unsigned long font_file_read(FT_Stream stream, unsigned long offset, unsi
 }
 
 static void font_file_close(FT_Stream stream) {
-  if (stream && stream->descriptor.pointer)
+  if (stream && stream->descriptor.pointer) {
     SDL_CloseIO((SDL_IOStream *) stream->descriptor.pointer);
+  }
   SDL_free(stream);
 }
 
@@ -437,9 +438,9 @@ static int font_set_face_metrics(RenFont *font, FT_Face face) {
   #ifdef LITE_USE_SDL_RENDERER
   pixel_size *= font->scale;
   #endif
-  if ((err = FT_Set_Pixel_Sizes(face, 0, (int) pixel_size)) != 0)
+  if ((err = FT_Set_Pixel_Sizes(face, 0, (int) pixel_size)) != 0) {
     return err;
-
+  }
   font->face = face;
   if(FT_IS_SCALABLE(face)) {
     font->height = (short)((face->height / (float)face->units_per_EM) * font->size);
@@ -465,7 +466,7 @@ RenFont* ren_font_load(const char* path, float size, ERenFontAntialiasing antial
 
   file = SDL_IOFromFile(path, "rb");
   if (!file) return NULL; // error set by SDL_IOFromFile
-  
+
   int len = strlen(path);
   font = check_alloc(SDL_calloc(1, sizeof(RenFont) + len + 1));
   strcpy(font->path, path);
@@ -630,9 +631,7 @@ double ren_draw_text(RenSurface *rs, RenFont **fonts, const char *text, size_t l
   int clip_end_x = clip.x + clip.w, clip_end_y = clip.y + clip.h;
 
   RenFont* last = NULL;
-  double last_pen_x = x;
-  bool underline = fonts[0]->style & FONT_STYLE_UNDERLINE;
-  bool strikethrough = fonts[0]->style & FONT_STYLE_STRIKETHROUGH;
+  // convert text in glyphs
 
   while (text < end) {
     unsigned int codepoint, r, g, b;
@@ -661,7 +660,7 @@ double ren_draw_text(RenSurface *rs, RenFont **fonts, const char *text, size_t l
           start_x += offset;
           glyph_start += offset;
         }
-        
+
         const SDL_PixelFormatDetails* surface_format = SDL_GetPixelFormatDetails(surface->format);
         const SDL_PixelFormatDetails* font_surface_format = SDL_GetPixelFormatDetails(font_surface->format);
 
@@ -700,15 +699,6 @@ double ren_draw_text(RenSurface *rs, RenFont **fonts, const char *text, size_t l
     float adv = font_get_xadvance(fonts[0], codepoint, metric, pen_x - original_pen_x, tab);
 
     if(!last) last = font;
-    else if(font != last || text == end) {
-      double local_pen_x = text == end ? pen_x + adv : pen_x;
-      if (underline)
-        ren_draw_rect(rs, (RenRect){last_pen_x, y / surface_scale + last->height - 1, (local_pen_x - last_pen_x) / surface_scale, last->underline_thickness * surface_scale}, color);
-      if (strikethrough)
-        ren_draw_rect(rs, (RenRect){last_pen_x, y / surface_scale + last->height / 2, (local_pen_x - last_pen_x) / surface_scale, last->underline_thickness * surface_scale}, color);
-      last = font;
-      last_pen_x = pen_x;
-    }
 
     pen_x += adv;
   }
@@ -716,13 +706,13 @@ double ren_draw_text(RenSurface *rs, RenFont **fonts, const char *text, size_t l
 }
 
 /******************* Rectangles **********************/
-static inline RenColor blend_pixel(RenColor dst, RenColor src) {
-  int ia = 0xff - src.a;
-  dst.r = ((src.r * src.a) + (dst.r * ia)) >> 8;
-  dst.g = ((src.g * src.a) + (dst.g * ia)) >> 8;
-  dst.b = ((src.b * src.a) + (dst.b * ia)) >> 8;
-  return dst;
-}
+// static inline RenColor blend_pixel(RenColor dst, RenColor src) {
+//   int ia = 0xff - src.a;
+//   dst.r = ((src.r * src.a) + (dst.r * ia)) >> 8;
+//   dst.g = ((src.g * src.a) + (dst.g * ia)) >> 8;
+//   dst.b = ((src.b * src.a) + (dst.b * ia)) >> 8;
+//   return dst;
+// }
 
 void ren_draw_rect(RenSurface *rs, RenRect rect, RenColor color) {
   if (color.a == 0) { return; }
@@ -772,7 +762,7 @@ int video_init(void) {
   static int ren_inited = 0;
   if (!ren_inited) {
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
-      return -1;     
+      return -1;
     SDL_EnableScreenSaver();
     SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
@@ -893,3 +883,4 @@ void ren_set_target_window(RenWindow *window)
 {
   target_window = window;
 }
+
