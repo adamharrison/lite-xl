@@ -316,11 +316,6 @@ jobs:
           pattern: lite-xl-*-release
           merge-multiple: true
           path: releases
-      - name: Generate Release Notes
-        if: needs.version.outputs.release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bash scripts/generate-release-notes.sh --version ${{ needs.version.outputs.release }}
       - name: Versioned Release
         uses: ncipollo/release-action@v1
         if: ${{ needs.version.outputs.release }}
