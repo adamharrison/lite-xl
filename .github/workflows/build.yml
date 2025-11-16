@@ -68,10 +68,13 @@ jobs:
           echo "buildtype=$BUILDTYPE" >> $GITHUB_OUTPUT
           echo "Build Version: $REF"
           echo "Build Type: $BUILDTYPE"
+          echo "Github Ref: $GITHUB_REF"
           if [[ "$REF" != "continuous" ]]; then
-            echo "release=$REF" >> $GITHUB_OUTPUT
-            echo "Release Version: $REF"
-          elif [[ $GITHUB_REF == refs/tags/* && `git rev-parse --abbrev-ref HEAD` == *"-preview" ]]; then
+            if [[ $GITHUB_REF == refs/tags/* ]]; then
+              echo "release=$REF" >> $GITHUB_OUTPUT
+              echo "Release Version: $REF"
+            fi
+          elif [[ `git rev-parse --abbrev-ref HEAD` == *"-preview" ]]; then
             echo "release=`git rev-parse --abbrev-ref HEAD`" >> $GITHUB_OUTPUT
             echo "Release Version: `git rev-parse --abbrev-ref HEAD`"
           fi
