@@ -77,6 +77,8 @@ function process.stream:read(bytes, options)
         local s = chunk:find("\n")
         if s then target = self.len - #chunk + s end
       end
+    elseif not self.process:running() then
+      break
     elseif coroutine.isyieldable() then
       if options.timeout and system.get_time() - start > options.timeout then
         error("timeout expired")
