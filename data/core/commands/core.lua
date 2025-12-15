@@ -145,7 +145,7 @@ local function open_project_directory(root_view, use_dialog)
   end)
 end
 
-local function add_project_directory(use_dialog)
+local function add_project_directory(root_view, use_dialog)
   open_directory(root_view, "Add Directory", use_dialog, true, function(abs_path)
     for _, dir in ipairs(abs_path) do
       print(dir)
