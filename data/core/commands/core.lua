@@ -252,10 +252,11 @@ command.add(nil, {
   end,
 
   ["core:open-project-module"] = function(root_view)
-    if not system.get_file_info(".lite_project.lua") then
-      core.try(core.write_init_project_module, ".lite_project.lua")
+    local path = core.root_project().path .. PATHSEP .. ".lite_project.lua"
+    if not system.get_file_info(path) then
+      core.try(core.write_init_project_module, path)
     end
-    local doc = core.open_doc(".lite_project.lua")
+    local doc = core.open_doc(path)
     root_view:open_doc(doc)
     doc:save()
   end,
