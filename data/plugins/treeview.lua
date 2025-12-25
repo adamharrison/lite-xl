@@ -589,7 +589,7 @@ core.add_thread(function()
 end)
 
 local function is_project_folder(item)
-  return item.abs_filename == item.project.path
+  return item and item.abs_filename == item.project.path
 end
 
 local function is_primary_project_folder(path)
