@@ -154,6 +154,30 @@ local function add_project_directory(root_view, use_dialog)
   end)
 end
 
+command.add(function() 
+  return not core.root_project().trusted 
+end, { 
+  ['core:trust-project'] = function() 
+    core.root_project():trust(true)
+    command.perform("core:restart")
+end })
+command.add(function() 
+  return not (core.root_project().trusted or {}).all 
+end, {
+  ['core:trust-project-all'] = function() 
+    core.root_project():trust({ all = true }) 
+    command.perform("core:restart")
+  end
+})
+command.add(function() 
+  return core.root_project().trusted ~= false
+end, { 
+  ['core:untrust-project'] = function() 
+    core.root_project():trust(false)
+    command.perform("core:restart")
+  end 
+})
+
 command.add(nil, {
   ["core:quit"] = function()
     core.quit()
