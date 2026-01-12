@@ -327,7 +327,7 @@ jobs:
           name: Lite XL ${{ needs.version.outputs.release }}
           prerelease: true
           allowUpdates: true
-          bodyFile: release-notes.md
+          generateReleaseNotes: true
           artifacts: "releases/*.*"
       - name: Update Tag
         uses: richardsimko/update-tag@v1
