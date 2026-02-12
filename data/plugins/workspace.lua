@@ -215,17 +215,19 @@ local function load_workspace()
           window = existing_window
         end
       end
-      window = window or core.add_window(Window(renwindow._restore(workspace_window.id) or renwindow.create("")))
-      local root = get_unlocked_root(window.root_view.root_node)
-      local active_view = load_node(root, workspace_window.documents)
-      if active_view then
-        window.root_view:set_active_view(active_view)
-      end
-      if workspace_window.mode == "normal" then
-        window.renwindow:set_size(table.unpack(workspace_window.dimensions))
-        window.renwindow:set_position(table.unpack(workspace_window.position))
-      elseif workspace_window.mode == "maximized" then
-        window.renwindow:set_mode("maximized")
+      if window then
+        window = window or core.add_window(Window(renwindow._restore(workspace_window.id) or renwindow.create("")))
+        local root = get_unlocked_root(window.root_view.root_node)
+        local active_view = load_node(root, workspace_window.documents)
+        if active_view then
+          window.root_view:set_active_view(active_view)
+        end
+        if workspace_window.mode == "normal" then
+          window.renwindow:set_size(table.unpack(workspace_window.dimensions))
+          window.renwindow:set_position(table.unpack(workspace_window.position))
+        elseif workspace_window.mode == "maximized" then
+          window.renwindow:set_mode("maximized")
+        end
       end
     end
     for i, dir_name in ipairs(workspace.directories) do
