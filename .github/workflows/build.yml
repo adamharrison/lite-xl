@@ -58,7 +58,7 @@ jobs:
         id: check_release
         env: { BUILDTYPE: "${{ github.event.inputs.buildtype }}" }
         run: |
-          if [[ $GITHUB_REF == refs/pull/* || ( $GITHUB_REF != refs/heads/master && $GITHUB_REF != refs/tags/* ) ]]; then
+          if [[ $GITHUB_REF == refs/pull/* || ( $GITHUB_REF != refs/heads/master && $GITHUB_REF != refs/tags/* && $GITHUB_REF != refs)  ]]; then
             export BUILDTYPE="debugoptimized"
           elif [[ -z $BUILDTYPE ]]; then
             export BUILDTYPE="release"
@@ -68,9 +68,15 @@ jobs:
           echo "buildtype=$BUILDTYPE" >> $GITHUB_OUTPUT
           echo "Build Version: $REF"
           echo "Build Type: $BUILDTYPE"
+          echo "Github Ref: $GITHUB_REF"
           if [[ "$REF" != "continuous" ]]; then
-            echo "release=$REF" >> $GITHUB_OUTPUT
-            echo "Release Version: $REF"
+            if [[ $GITHUB_REF == refs/tags/* ]]; then
+              echo "release=$REF" >> $GITHUB_OUTPUT
+              echo "Release Version: $REF"
+            fi
+          elif [[ `git rev-parse --abbrev-ref HEAD` == *"-preview" ]]; then
+            echo "release=`git rev-parse --abbrev-ref HEAD`" >> $GITHUB_OUTPUT
+            echo "Release Version: `git rev-parse --abbrev-ref HEAD`"
           fi
 
 
@@ -180,7 +186,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Build
-        uses: docker://ghcr.io/lite-xl/lite-xl-build-box-manylinux:v4
+        uses: docker://ghcr.io/lite-xl/lite-xl-build-box-manylinux:master
         with:
           entrypoint: /entrypoint.sh
           args: bash scripts/build.sh --addons --debug --forcefallback --lto --portable --mode ${{ needs.version.outputs.buildtype }} -b build
@@ -189,7 +195,7 @@ jobs:
         run: tar -C build -czvf lite-xl-${{ needs.version.outputs.ref }}-x86_64-linux-portable.tar.gz lite-xl
 
       - name: Package Linux (AppImage)
-        uses: docker://ghcr.io/lite-xl/lite-xl-build-box-manylinux:v4
+        uses: docker://ghcr.io/lite-xl/lite-xl-build-box-manylinux:master
         with:
           entrypoint: /entrypoint.sh
           run: bash scripts/package-appimage.sh --debug --version ${{ needs.version.outputs.ref }} -b build
@@ -324,7 +330,7 @@ jobs:
         with:
           tag: ${{ needs.version.outputs.release }}
           name: Lite XL ${{ needs.version.outputs.release }}
-          draft: true
+          prerelease: true
           allowUpdates: true
           bodyFile: release-notes.md
           artifacts: "releases/*.*"
