@@ -319,6 +319,9 @@ setmetatable(core, {
     elseif key == "project_dir" then
       core.deprecation_log("core." .. key)
       return core.projects[1].path
+    elseif key == "project_directories" then
+      core.deprecation_log("core." .. key)
+      return core.projects
     elseif root_view and root_view[key] then
       core.deprecation_log("core." .. key)
       return root_view[key]
