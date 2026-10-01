@@ -312,18 +312,18 @@ function core.init()
     project_dir_abs = system.absolute_path(".")
     local status, err = pcall(core.set_project, project_dir_abs)
   end
-
+  
+  style = require "colors.default"
+  keymap = require "core.keymap"
+  dirwatch = require "core.dirwatch"
+  Doc = require "core.doc"
   -- Load core and user plugins giving preference to user ones with same name.
   -- Additionally, do window set up at priority 0, so that plugins can override
   -- window setup if they want to set up some sort of alternate renderer.
   local plugins_success, plugins_refuse_list = core.load_plugins({ { name = "Window Creation", priority = 0, load = function()
     -- Load default commands first so plugins can override them
-    style = require "colors.default"
     Window = require "core.window"
     command = require "core.command"
-    keymap = require "core.keymap"
-    dirwatch = require "core.dirwatch"
-    Doc = require "core.doc"
     command.add_defaults()
     core.add_window(Window(renwindow._restore() or renwindow.create("")))
   end } })
