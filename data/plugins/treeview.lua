@@ -259,12 +259,12 @@ function TreeView:on_mouse_moved(px, py, ...)
 
   local item_changed, tooltip_changed
   for item, x,y,w,h in self:each_item() do
-    if px > x and py > y and px <= x + w and py <= y + h then
+    if px >= x and py >= y and px < x + w and py < y + h then
       item_changed = true
       self.hovered_item = item
 
       x,y,w,h = self:get_text_bounding_box(item, x,y,w,h)
-      if px > x and py > y and px <= x + w and py <= y + h then
+      if px >= x and py >= y and px < x + w and py < y + h then
         tooltip_changed = true
         self.tooltip.x, self.tooltip.y = px, py
         self.tooltip.begin = system.get_time()

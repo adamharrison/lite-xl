@@ -164,7 +164,7 @@ function ContextMenu:on_mouse_moved(px, py)
 
   self.selected = -1
   for i, _, x, y, w, h in self:each_item() do
-    if px > x and px <= x + w and py > y and py <= y + h then
+    if px >= x and px < x + w and py >= y and py < y + h then
       self.selected = i
       core.request_cursor("arrow")
       break
