@@ -10,7 +10,7 @@ local tokenizer = require "core.tokenizer"
 
 local function append_line_if_last_line(dv, line)
   if line >= #dv.doc.lines then
-    dv:insert(line, math.huge, "\n")
+    dv.doc:insert(line, math.huge, "\n")
   end
 end
 
