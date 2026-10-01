@@ -248,7 +248,7 @@ local write_commands = {
   end,
 
   ["docview:join-lines"] = function(dv)
-    for idx, line1, col1, line2, col2 in dv.doc:get_selections(true) do
+    for idx, line1, col1, line2, col2 in dv:get_selections(true) do
       if line1 == line2 then line2 = line2 + 1 end
       local text = dv.doc:get_text(line1, 1, line2, math.huge)
       text = text:gsub("(.-)\n[\t ]*", function(x)
