@@ -1128,11 +1128,13 @@ function DocView:previous_tokens_end_in_newline(line)
   local prev_dcache
   if line > 1 and line <= #self.dcache then
     local vline = self.dtovcache[line]
-    for i = getvoffset(self.vcache[vline]), #self.dcache do
-      if #self.dcache[i] > 0 then
-        local nvline = getvoffset(self.dtovcache[vline])
-        if not nvline or nvline > vline then break end
-        prev_dcache = self.dcache[i]
+    if self.vcache[vline] then
+      for i = getvoffset(self.vcache[vline]), #self.dcache do
+        if #self.dcache[i] > 0 then
+          local nvline = getvoffset(self.dtovcache[vline])
+          if not nvline or nvline > vline then break end
+          prev_dcache = self.dcache[i]
+        end
       end
     end
   end
@@ -1354,6 +1356,7 @@ local function vline_iter(state, position)
       newline = newline + 1
     until newline >= #self.dcache or self.dcache[newline] == false or #self.dcache[newline] > 0
     position = mkvoffset(newline, 1)
+     if newline > #self.dcache and not text then return nil end
   else
     position = mkvoffset(line, offset + 5)
   end

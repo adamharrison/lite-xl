@@ -351,7 +351,7 @@ local function resize_child_node(node, axis, value, delta)
     accept_resize = node.b:resize(axis, node.size[axis] - value)
   end
   if not accept_resize then
-    node.divider = node.divider + delta / node.size[axis]
+    node.divider = value / node.size[axis]
   end
 end
 
