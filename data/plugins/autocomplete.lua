@@ -659,7 +659,7 @@ local function draw_suggestions_box(av)
     end
   end
 
-  renderer.draw_rect(rx, y, rw, 2, style.caret)
+  renderer.draw_rect(rx, y, rw, style.padding.y, style.caret)
   renderer.draw_rect(rx, y+2, rw, lh, style.background)
   common.draw_text(
     style.font,
